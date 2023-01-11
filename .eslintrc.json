@@ -1,0 +1,73 @@
+{
+    "env": {
+        "browser": true,
+        "es2022": true
+    },
+    "extends": [
+        "eslint:recommended",
+        "airbnb",
+        "airbnb/hooks",
+        "plugin:react/recommended",
+        "plugin:react/jsx-runtime", //for using the new JSX transform from React 17
+        "plugin:import/recommended",
+        "plugin:prettier/recommended" //add as the last extension
+    ],
+    "parserOptions": {
+        "ecmaFeatures": {
+            "jsx": true
+        },
+        "ecmaVersion": 13,
+        "sourceType": "module", //ECMAScript module - code has a module scope and is run in strict mode
+        "requireConfigFile": false,
+        "babelOptions": {
+            "babelrc": false,
+            "configFile": false,
+            "presets": ["@babel/preset-react"]
+        }
+    },
+    "plugins": ["react", "jsx-a11y"],
+    "parser": "@babel/eslint-parser",
+    "rules": {
+        "linebreak-style": ["off", "unix"],
+        "quotes": ["error", "single"], //in .prettierrc singleQuote must be true
+        "max-len": ["error", {"code": 120, "ignoreUrls": true}], //keep this and Prettier’s printWidth option in sync
+        //rules of eslint-plugin-import:
+        "import/no-unresolved": [2, { "caseSensitive": false }], //don't reported if './foo' is actually './Foo'
+        "import/order": [
+            "error",
+            {
+                "groups": [
+                    "builtin",
+                    "external",
+                    "internal",
+                    "parent",
+                    "sibling",
+                    "index"
+                ],
+                "newlines-between": "always" //new line between each group will be enforced,
+                //and new lines inside a group will be forbidden
+            }
+        ],
+        //rules of eslint-plugin-react:
+        "react/jsx-filename-extension": [1, { "extensions": [".js", ".jsx"] }], //allow use JSX in set of extensions
+        "react/prop-types": 0, //disallow missing props validation in a React component definition,
+        //because it is enabled in plugin:react/recommended
+        "react/static-property-placement": ["error", "static public field"], //declared 'defaultProps' inside the class body
+        "react/state-in-constructor": [0, "always"], //for using 'state' outside the constructor
+        "react/destructuring-assignment": ["error", "always", { "ignoreClassFields": true}], //destructuring is not required
+        //in class field declarations
+        "jsx-a11y/no-autofocus": [ 0, { "ignoreNonDOM": true }],
+        "jsx-a11y/label-has-associated-control": [ 2, {
+            "assert": "either",
+            "depth": 3
+        }]
+    },
+    "settings": {
+        "import/resolver": { //settings of eslint-plugin-import
+            "node": {
+                "extensions": [".js", ".jsx", ".ts", ".tsx"],
+                "moduleDirectory": ["node_modules", "src/"]
+            }
+        }
+    }
+}
