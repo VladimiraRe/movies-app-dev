@@ -1,0 +1,11 @@
+.moviesApp {
+    padding: 17px 36px;
+    margin: 0 auto;
+    max-width: 1010px;
+    background-color: inherit;
+}
+@media (max-width: 576px) {
+    .moviesApp {
+        padding: 17px 16px;
+    }
+}

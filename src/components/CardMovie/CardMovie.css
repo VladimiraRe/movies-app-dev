@@ -1,0 +1,31 @@
+.cardMovie {
+    display: flex;
+    border-radius: 0;
+    box-shadow: 0px 4px 12px 0px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+}
+.cardMovie > div:first-child {
+    min-width: 40%;
+    min-height: 100%;
+}
+.cardMovie > div:first-child > img {
+    object-fit: cover;
+    height: 100%;
+    border-radius: 0;
+}
+.cardMovie > div:last-child {
+    padding: 8px 20px;
+    display: flex;
+    flex-direction: column;
+    row-gap: 7px;
+}
+.cardMovie > div:last-child::before,
+.cardMovie > div:last-child::after {
+    content: none;
+}
+.cardMovie h5,
+.cardMovie span,
+.cardMovie p {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+}
