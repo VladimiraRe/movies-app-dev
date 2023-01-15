@@ -2,7 +2,7 @@ import { List } from 'antd';
 
 import CardMovie from '../CardMovie';
 
-export default function MoviesList({ data }) {
+export default function MoviesList({ data, baseImgUrl }) {
     const { Item } = List;
     return (
         <List
@@ -13,7 +13,7 @@ export default function MoviesList({ data }) {
             dataSource={data}
             renderItem={(item) => (
                 <Item>
-                    <CardMovie movie={item} />
+                    <CardMovie movie={item} baseImgUrl={baseImgUrl} />
                 </Item>
             )}
         />

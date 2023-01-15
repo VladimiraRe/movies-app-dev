@@ -60,7 +60,9 @@
         "jsx-a11y/label-has-associated-control": [ 2, {
             "assert": "either",
             "depth": 3
-        }]
+        }],
+        //allow _ to indicate “private” members of objects
+        "no-underscore-dangle": "off"
     },
     "settings": {
         "import/resolver": { //settings of eslint-plugin-import

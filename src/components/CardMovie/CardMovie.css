@@ -29,3 +29,7 @@
     font-family: 'Inter', sans-serif;
     margin: 0;
 }
+.cardMovie .cardMovie__skeletonImg {
+    width: 100% !important;
+    height: 100% !important;
+}

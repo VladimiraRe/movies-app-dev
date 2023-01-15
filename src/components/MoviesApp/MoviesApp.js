@@ -1,29 +1,82 @@
+/* eslint-disable max-len */
 import { Component } from 'react';
-import { Layout } from 'antd';
+import { Layout, Spin, Alert } from 'antd';
 
+import TheMovieDB from '../../requests/TheMovieDB';
 import MoviesList from '../MoviesList';
 import './MoviesApp.css';
 
 export default class MoviesApp extends Component {
-    data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map(() => ({
-        title: 'The way back',
-        date: 'March 5, 2020',
-        tags: ['action', 'drama'],
-        img: 'https://m.media-amazon.com/images/M/MV5BYjBjMTgyYzktN2U0Mi00YTJhLThkZDQtZmM1ZDlmNWMwZDQ3XkEyXkFqcGdeQXVyMDU5MDEyMA@@._V1_.jpg',
-        description:
-            // eslint-disable-next-line max-len
-            'A former basketball all-star, who has lost his wife and family foundation in a struggle with addiction attempts to regain his soul  and salvation by becoming the coach of a disparate ethnically mixed high. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse ex ligula, accumsan quis sodales vel, egestas eget ex. Nunc elementum a ante pulvinar volutpat. Pellentesque porta tortor sit amet felis condimentum, ac laoreet diam lobortis. Sed lectus purus, efficitur vitae sollicitudin consectetur, posuere pulvinar augue. Praesent pretium finibus est, quis vestibulum augue porta quis. Sed in bibendum purus. Cras venenatis et purus eu mollis.',
-    }));
+    theMovieDB = new TheMovieDB();
 
-    state = {
-        data: this.data,
-    };
+    constructor(props) {
+        super(props);
+        this.state = {
+            isLoaded: false,
+            data: [],
+            baseImgUrl: '',
+        };
+    }
+
+    componentDidMount() {
+        this.theMovieDB
+            .getBaseImgUrl()
+            .then((url) =>
+                this.setState({
+                    baseImgUrl: url,
+                })
+            )
+            .catch(() => {
+                this.setState({
+                    baseImgUrl: false,
+                });
+            });
+        this.searchMovies('return');
+    }
+
+    searchMovies(request) {
+        const { isLoaded } = this.state;
+        if (isLoaded === true) {
+            this.setState({ isLoaded: false });
+        }
+        this.theMovieDB
+            .getListOfMovies(request)
+            .then((movies) =>
+                this.setState({
+                    data: movies,
+                    isLoaded: true,
+                })
+            )
+            .catch(() =>
+                this.setState({
+                    data: false,
+                })
+            );
+    }
 
     render() {
-        const { data } = this.state;
+        const { data, isLoaded, baseImgUrl } = this.state;
+        if (data === false) {
+            return (
+                <Layout className='moviesApp'>
+                    <Alert
+                        message='Oops'
+                        description='Sorry, something is wrong. Please try again later'
+                        type='error'
+                    />
+                </Layout>
+            );
+        }
+        if (isLoaded === false) {
+            return (
+                <Layout className='moviesApp'>
+                    <Spin tip='Loading' />;
+                </Layout>
+            );
+        }
         return (
             <Layout className='moviesApp'>
-                <MoviesList data={data} />;
+                <MoviesList data={data.results} baseImgUrl={baseImgUrl} />;
             </Layout>
         );
     }
