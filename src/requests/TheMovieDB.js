@@ -15,7 +15,7 @@ export default class TheMovieDB {
     async getListOfMovies(request) {
         const url = `${this._baseApi}3/search/movie?api_key=${this._apiKey}&query=${request}`;
         const res = await TheMovieDB.get(url);
-        return res;
+        return TheMovieDB._transformData(res);
     }
 
     async getConfiguration() {
@@ -32,5 +32,16 @@ export default class TheMovieDB {
             },
         } = await this.getConfiguration();
         return baseUrl + w185;
+    }
+
+    static _transformData(data) {
+        let res = data.results;
+        res = res.map((el) => ({
+            title: el.title,
+            poster: el.poster_path,
+            date: el.release_date,
+            description: el.overview,
+        }));
+        return res;
     }
 }

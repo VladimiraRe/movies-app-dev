@@ -4,10 +4,7 @@ import { intlFormat, parseISO } from 'date-fns';
 
 import './CardMovie.css';
 
-export default function CardMovie({
-    movie: { title, poster_path: poster, release_date: date, overview: description },
-    baseImgUrl,
-}) {
+export default function CardMovie({ movie: { title, poster, date, description }, baseImgUrl }) {
     const { Text, Paragraph, Title } = Typography;
     const ellipsis = {
         rows: 6,
