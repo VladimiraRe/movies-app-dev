@@ -29,6 +29,14 @@ export default class MoviesList extends Component {
         this.searchMovies('return');
     }
 
+    componentDidUpdate(prevProps) {
+        let { search } = this.props;
+        search = search.split(' ').join('');
+        if (search && prevProps.search !== search) {
+            this.searchMovies(search);
+        }
+    }
+
     searchMovies(request) {
         const { isLoaded } = this.state;
         if (isLoaded === false) {
@@ -36,9 +44,9 @@ export default class MoviesList extends Component {
         }
         this.theMovieDB
             .getListOfMovies(request)
-            .then((movies) =>
+            .then((data) =>
                 this.setState({
-                    data: movies,
+                    data,
                     isLoaded: false,
                 })
             )
@@ -54,13 +62,13 @@ export default class MoviesList extends Component {
         const { data, baseImgUrl, isLoaded } = this.state;
         let res;
 
-        if (!data) {
-            res = <Alert message='Oops' description='Sorry, something is wrong. Please try again later' type='error' />;
-        }
         if (isLoaded) {
             res = <Spin tip='Loading' />;
-        }
-        if (data && !isLoaded) {
+        } else if (!data) {
+            res = <Alert message='Oops' description='Sorry, something is wrong. Please try again later' type='error' />;
+        } else if (data.length === 0) {
+            res = <Alert message='Nothing found for your request' type='warning' />;
+        } else {
             res = <RenderContent data={data} baseImgUrl={baseImgUrl} />;
         }
 

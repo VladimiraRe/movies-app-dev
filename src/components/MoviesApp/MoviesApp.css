@@ -4,8 +4,14 @@
     max-width: 1010px;
     background-color: inherit;
 }
+.moviesApp > input {
+    margin-bottom: 36px;
+}
 @media (max-width: 576px) {
     .moviesApp {
         padding: 17px 16px;
+    }
+    .moviesApp > input {
+        margin-bottom: 10px;
     }
 }

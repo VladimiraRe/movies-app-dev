@@ -5,12 +5,15 @@ import { intlFormat, parseISO } from 'date-fns';
 import './CardMovie.css';
 
 export default function CardMovie({ movie: { title, poster, date, description }, baseImgUrl }) {
+    if (!title) return null;
+
     const { Text, Paragraph, Title } = Typography;
     const ellipsis = {
         rows: 6,
         expandable: false,
         symbol: 'more',
     };
+
     const tags = ['action', 'drama'];
     const tagsArr = tags.map((tag) => {
         return (
@@ -22,23 +25,26 @@ export default function CardMovie({ movie: { title, poster, date, description },
 
     let cover;
 
-    if (baseImgUrl === false) {
+    if (baseImgUrl === false || !poster) {
         cover = <Skeleton.Image className='cardMovie__skeletonImg' />;
     } else {
         cover = <img alt={title} src={baseImgUrl + poster} />;
     }
 
-    let formatDate = parseISO(date);
-    formatDate = intlFormat(formatDate, { month: 'short', day: 'numeric', year: 'numeric' }, { locale: 'en-US' });
+    const formatDate = date
+        ? intlFormat(parseISO(date), { month: 'short', day: 'numeric', year: 'numeric' }, { locale: 'en-US' })
+        : '';
 
     return (
         <Card style={{ height: '279px' }} className='cardMovie' cover={cover}>
             <Title level={5}>{title}</Title>
-            <Text type='secondary'>{formatDate}</Text>
-            <Space>{tagsArr}</Space>
-            <Paragraph ellipsis={ellipsis}>
-                <p>{description}</p>
-            </Paragraph>
+            {date && <Text type='secondary'>{formatDate}</Text>}
+            {tagsArr && <Space>{tagsArr}</Space>}
+            {description && (
+                <Paragraph ellipsis={ellipsis}>
+                    <p>{description}</p>
+                </Paragraph>
+            )}
         </Card>
     );
 }
