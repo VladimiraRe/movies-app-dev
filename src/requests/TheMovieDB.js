@@ -1,26 +1,22 @@
 export default class TheMovieDB {
-    _baseApi = 'https://api.themoviedb.org/';
+    _baseApi = 'https://api.themoviedb.org/3';
 
     _apiKey = 'b9a650f12ff7d9fcf25e0ad6d4fc0d66';
 
-    static async get(url) {
-        let res = await fetch(url).catch((err) => {
-            throw err;
-        });
-        if (!res.ok) throw new Error(`Couldn't fetch ${url}, response status: ${res.status}`);
-        res = await res.json();
-        return res;
+    async searchMovies(request, page) {
+        const method = '/search/movie';
+        const res = await this._get(method, page, request);
+        return TheMovieDB._transformData(res);
     }
 
-    async getListOfMovies(request) {
-        const url = `${this._baseApi}3/search/movie?api_key=${this._apiKey}&query=${request}`;
-        const res = await TheMovieDB.get(url);
+    async getPopularMovies(page) {
+        const method = '/movie/popular';
+        const res = await this._get(method, page);
         return TheMovieDB._transformData(res);
     }
 
     async getConfiguration() {
-        const url = `${this._baseApi}3/configuration?api_key=${this._apiKey}`;
-        const res = await TheMovieDB.get(url);
+        const res = await this._get('/configuration');
         return res;
     }
 
@@ -32,6 +28,20 @@ export default class TheMovieDB {
             },
         } = await this.getConfiguration();
         return baseUrl + w185;
+    }
+
+    async _get(method, page, request) {
+        let url = `${this._baseApi}${method}?api_key=${this._apiKey}`;
+        if (page) url += `&page=${page}`;
+        if (request) url += `&query=${request}`;
+
+        let res = await fetch(url).catch((err) => {
+            throw err;
+        });
+        if (!res.ok) throw new Error(`Couldn't fetch ${url}, response status: ${res.status}`);
+        res = await res.json();
+
+        return res;
     }
 
     static _transformData(data) {

@@ -8,25 +8,30 @@ import './MoviesApp.css';
 
 export default class MoviesApp extends Component {
     state = {
+        inputValue: '',
         search: '',
         isOnline: navigator.onLine,
     };
 
-    changeSearch = (e) => {
+    changeValue = (value, e) => {
         const newValue = e.target.value;
         this.setState(({ search }) => {
             if (!search === newValue) return false;
-            return { search: newValue };
+            return { [value]: newValue };
         });
     };
 
-    changeSearchDebounce = (e) => {
-        const debobounce = lodashDebounce(() => this.changeSearch(e), 5000);
+    changeSearch = (e) => {
+        this.changeValue('inputValue', e);
+        const debobounce = lodashDebounce(() => {
+            this.changeValue('search', e);
+            this.setState({ inputValue: '' });
+        }, 2000);
         debobounce();
     };
 
     render() {
-        const { search, isOnline } = this.state;
+        const { search, inputValue, isOnline } = this.state;
         if (isOnline) {
             window.addEventListener('offline', () => this.setState({ isOnline: false }));
         } else {
@@ -36,7 +41,7 @@ export default class MoviesApp extends Component {
         return (
             <Layout className='moviesApp'>
                 {isOnline ? (
-                    <Content inputFunc={this.changeSearchDebounce} search={search} />
+                    <Content inputFunc={this.changeSearch} search={search} value={inputValue} />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
                 )}
@@ -45,10 +50,10 @@ export default class MoviesApp extends Component {
     }
 }
 
-function Content({ search, inputFunc }) {
+function Content({ search, value, inputFunc }) {
     return (
         <>
-            <Input onChange={inputFunc} placeholder='Type to search...' />
+            <Input onChange={inputFunc} placeholder='Type to search...' value={value} />
             <MoviesList search={search} />
         </>
     );
