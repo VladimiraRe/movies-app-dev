@@ -3,16 +3,37 @@ export default class TheMovieDB {
 
     _apiKey = 'b9a650f12ff7d9fcf25e0ad6d4fc0d66';
 
-    async searchMovies(request, page) {
+    async searchMovies(sessionId, request, page) {
         const method = '/search/movie';
         const res = await this._get(method, page, request);
-        return TheMovieDB._transformData(res);
+        return this._transformData(res.results, sessionId);
     }
 
-    async getPopularMovies(page) {
+    async getPopularMovies(sessionId, page) {
         const method = '/movie/popular';
         const res = await this._get(method, page);
-        return TheMovieDB._transformData(res);
+        console.log(`total_pages: ${res.total_pages} page: ${res.page}`);
+        const transformRes = await this._transformData(res.results, sessionId);
+        return transformRes;
+    }
+
+    async getRatedMovies(sessionId) {
+        const res = await this._getRatedMoviesAllFields(sessionId);
+        return this._transformData(res.results);
+    }
+
+    async rateMovie(sessionId, movieId, raiting) {
+        const method = `/movie/${movieId}/rating`;
+        const headers = { 'Content-Type': 'application/json;charset=utf-8' };
+        const data = { value: raiting };
+        const res = await this._post(method, data, sessionId, headers);
+        return res;
+    }
+
+    async createGuestSession() {
+        const method = '/authentication/guest_session/new';
+        const res = await this._get(method);
+        return res.guest_session_id;
     }
 
     async getConfiguration() {
@@ -44,14 +65,50 @@ export default class TheMovieDB {
         return res;
     }
 
-    static _transformData(data) {
-        let res = data.results;
-        res = res.map((el) => ({
-            title: el.title,
-            poster: el.poster_path,
-            date: el.release_date,
-            description: el.overview,
+    async _post(method, data, sessionId, headers) {
+        let url = `${this._baseApi}${method}?api_key=${this._apiKey}`;
+        if (sessionId) url += `&guest_session_id=${sessionId}`;
+        const obj = { method: 'POST' };
+        if (data) obj.body = JSON.stringify(data);
+        if (headers) obj.headers = headers;
+        const res = await fetch(url, obj);
+        if (!res.ok) throw new Error(`Couldn't fetch ${url}, response status: ${res.status}`);
+        return true;
+    }
+
+    async _transformData(data, sessionId) {
+        const rating = null;
+
+        const res = data.map((movie) => ({
+            id: movie.id,
+            title: movie.title,
+            poster: movie.poster_path,
+            date: movie.release_date,
+            description: movie.overview,
+            voteAverage: movie.vote_average,
+            rating: !sessionId ? movie.rating : rating,
         }));
+
+        if (sessionId) {
+            const ownRating = await this._getRatedMoviesAllFields(sessionId);
+            ownRating.forEach((movieWithRating) => {
+                res.filter((movie) => {
+                    if (movie.id === movieWithRating.id) {
+                        // eslint-disable-next-line no-param-reassign
+                        movie.rating = movieWithRating.rating;
+                        return true;
+                    }
+                    return false;
+                });
+            });
+        }
+
         return res;
+    }
+
+    async _getRatedMoviesAllFields(sessionId) {
+        const method = `/guest_session/${sessionId}/rated/movies`;
+        const res = await this._get(method);
+        return res.results;
     }
 }
