@@ -1,39 +1,49 @@
 import { Component } from 'react';
-import { List, Spin, Alert } from 'antd';
+import { List, Spin, Alert, Pagination } from 'antd';
 
 import CardMovie from '../CardMovie';
 import TheMovieDB from '../../requests/TheMovieDB';
+import './MovieList.css';
 
 export default class MoviesList extends Component {
+    static numberOfMoviesInRequest = (x, y) => {
+        const gcd = (a, b) => (a % b === 0 ? b : gcd(b, a % b));
+        const scm = (a, b) => (a * b) / gcd(a, b);
+        return scm(x, y);
+    };
+
     theMovieDB = new TheMovieDB();
 
     method = {
-        popular: (sessionId, currentPage) => this.theMovieDB.getPopularMovies(sessionId, currentPage),
-        search: (sessionId, currentPage) => this.theMovieDB.searchMovies(sessionId, currentPage),
+        popular: (sessionId, serverPage) => this.theMovieDB.getPopularMovies(sessionId, serverPage),
+        search: (sessionId, serverPage) => this.theMovieDB.searchMovies(sessionId, serverPage),
         rated: (sessionId) => this.theMovieDB.getRatedMovies(sessionId),
     };
 
     state = {
         isLoaded: true,
         data: [],
+        serverData: [],
         baseImgUrl: '',
-        currentPage: null,
+        appPage: 1,
+        totalResults: null,
         method: null,
     };
 
     async componentDidMount() {
         const { type } = this.props;
-        const newState = { method: this.method[type] };
-        if (type !== 'rated') newState.currentPage = 1;
 
         await this.theMovieDB
             .getBaseImgUrl()
-            .then((url) => {
-                newState.baseImgUrl = url;
-                this.setState(newState, async () => {
-                    const { method } = this.state;
-                    await this.getMovies(method);
-                });
+            .then((baseImgUrl) => {
+                this.setState(
+                    {
+                        method: this.method[type],
+                        appPage: 1,
+                        baseImgUrl,
+                    },
+                    () => this.setMovies(1)
+                );
             })
             .catch(() => {
                 this.setState({
@@ -48,41 +58,52 @@ export default class MoviesList extends Component {
         currentSearch = currentSearch.split(' ').join('');
 
         if (currentType !== prevProps.type) {
-            const newState = { method: this.method[currentType] };
-            if (currentType !== 'rated') newState.currentPage = 1;
-            this.setState(newState);
+            this.setState(
+                {
+                    method: this.method[currentType],
+                    isLoaded: true,
+                    appPage: 1,
+                },
+                () => this.setMovies(1, true)
+            );
         }
 
         if (currentSearch && prevProps.search !== currentSearch) {
-            const { currentPage } = this.state;
-            this.setState(({ method }) => {
-                const newMethod = this.method.search;
-                const newState = {};
-                if (method !== newMethod) newState.method = newMethod;
-                if (currentPage !== 1) newState.currentPage = 1;
-                if (Object.keys(newState).length !== 0) return newState;
-
-                const { sessionId } = this.props;
-                this.getMovies(() => method(sessionId, currentPage));
-                return null;
-            });
+            this.setState({ appPage: 1, isLoaded: true }, () => this.setMovies(1, true));
         }
     }
 
-    getMovies = async (method) => {
-        const { isLoaded, currentPage } = this.state;
-        const { sessionId } = this.props;
+    getMovies = async (method, page, isNew) => {
+        const {
+            sessionId,
+            settings: { numberOfRequests, serverSize, serverLimit },
+        } = this.props;
 
-        if (isLoaded === false) {
-            this.setState({ isLoaded: true });
+        const compileState = { serverData: [] };
+        const requests = [];
+        // eslint-disable-next-line no-plusplus
+        for (let i = 0; i < numberOfRequests; i++) {
+            if (page + i <= serverLimit) {
+                requests.push(
+                    new Promise((resolve) => {
+                        method(sessionId, page + i).then((res) => {
+                            if (isNew && i === 0) {
+                                const totalResults =
+                                    res.totalPages <= serverLimit
+                                        ? res.totalPages * serverSize
+                                        : serverLimit * serverSize;
+                                compileState.totalResults = totalResults;
+                            }
+                            compileState.serverData = [...compileState.serverData, ...res.data];
+                            return resolve();
+                        });
+                    })
+                );
+            }
         }
-
-        await method(sessionId, currentPage)
-            .then((data) => {
-                this.setState({
-                    data,
-                    isLoaded: false,
-                });
+        const newState = await Promise.all(requests)
+            .then(() => {
+                return compileState;
             })
             .catch(() =>
                 this.setState({
@@ -90,13 +111,39 @@ export default class MoviesList extends Component {
                     isLoaded: false,
                 })
             );
+        return newState;
     };
 
-    changePage = (newPage) => {
-        this.setState(({ currentPage }) => {
-            if (newPage === currentPage) return false;
-            return { currentPage: newPage };
-        });
+    setMovies = async (newPage, oldPage) => {
+        const { method } = this.state;
+        const { appSize, numberOfMoviesInRequest, numberOfRequests } = this.props.settings;
+
+        const oldRequest = Math.ceil((oldPage * appSize) / numberOfMoviesInRequest);
+        const newRequest = Math.ceil((newPage * appSize) / numberOfMoviesInRequest);
+        const dataStart = (newPage - 1) * appSize - (newRequest - 1) * numberOfMoviesInRequest;
+
+        if (oldRequest === newRequest) {
+            const newState = { isLoaded: false };
+            const { serverData } = this.state;
+            newState.data = serverData.slice(dataStart, dataStart + appSize);
+            this.setState(newState);
+            return;
+        }
+
+        if (oldRequest !== newRequest || (!oldPage && newRequest)) {
+            this.setState({ isLoaded: true }, async () => {
+                const newState = await this.getMovies(method, numberOfRequests * (newRequest - 1) + 1, !oldPage);
+                const { serverData } = newState;
+                newState.isLoaded = false;
+                newState.data = serverData.slice(dataStart, dataStart + appSize);
+                this.setState(newState);
+            });
+        }
+    };
+
+    changePage = async (newPage) => {
+        const { appPage } = this.state;
+        this.setState({ appPage: newPage }, () => this.setMovies(newPage, appPage));
     };
 
     changeRating = async (id, rating) => {
@@ -104,7 +151,10 @@ export default class MoviesList extends Component {
     };
 
     render() {
-        const { data, baseImgUrl, isLoaded, currentPage } = this.state;
+        const { data, baseImgUrl, isLoaded, totalResults, appPage } = this.state;
+        const {
+            settings: { appSize },
+        } = this.props;
         let res;
 
         if (isLoaded) {
@@ -118,9 +168,11 @@ export default class MoviesList extends Component {
                 <RenderContent
                     data={data}
                     baseImgUrl={baseImgUrl}
-                    current={currentPage}
                     changePage={this.changePage}
                     changeRating={this.changeRating}
+                    totalResults={totalResults}
+                    appPage={appPage}
+                    pageSize={appSize}
                 />
             );
         }
@@ -129,27 +181,33 @@ export default class MoviesList extends Component {
     }
 }
 
-function RenderContent({ data, baseImgUrl, current, changePage, changeRating }) {
+function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResults, appPage, pageSize }) {
     const { Item } = List;
     return (
-        <List
-            grid={{ gutter: 16, column: 2, xs: 1 }}
-            pagination={{
-                pageSize: 6,
-                onChange: current ? changePage : null,
-                current,
-            }}
-            className='movieList'
-            dataSource={data}
-            renderItem={(item) => (
-                <Item>
-                    <CardMovie
-                        movie={item}
-                        baseImgUrl={baseImgUrl}
-                        onChangeRating={(rating) => changeRating(item.id, rating)}
-                    />
-                </Item>
-            )}
-        />
+        <>
+            <List
+                grid={{ gutter: 16, column: 2, xs: 1 }}
+                className='movieList'
+                dataSource={data}
+                renderItem={(item) => (
+                    <Item>
+                        <CardMovie
+                            movie={item}
+                            baseImgUrl={baseImgUrl}
+                            onChangeRating={(rating) => changeRating(item.id, rating)}
+                        />
+                    </Item>
+                )}
+            />
+            <Pagination
+                className='movieList__pagination'
+                pageSize={pageSize}
+                onChange={(page) => changePage(page)}
+                total={totalResults}
+                current={appPage}
+                showSizeChanger={false}
+                hideOnSinglePage
+            />
+        </>
     );
 }

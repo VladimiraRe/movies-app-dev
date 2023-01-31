@@ -6,20 +6,21 @@ export default class TheMovieDB {
     async searchMovies(sessionId, request, page) {
         const method = '/search/movie';
         const res = await this._get(method, page, request);
-        return this._transformData(res.results, sessionId);
+        const transformRes = await this._transformData(res.results, sessionId);
+        return { data: transformRes, totalPages: res.total_pages };
     }
 
     async getPopularMovies(sessionId, page) {
         const method = '/movie/popular';
         const res = await this._get(method, page);
-        console.log(`total_pages: ${res.total_pages} page: ${res.page}`);
         const transformRes = await this._transformData(res.results, sessionId);
-        return transformRes;
+        return { data: transformRes, totalPages: res.total_pages };
     }
 
     async getRatedMovies(sessionId) {
         const res = await this._getRatedMoviesAllFields(sessionId);
-        return this._transformData(res.results);
+        const transformRes = await this._transformData(res.results);
+        return { data: transformRes, totalPages: res.total_pages };
     }
 
     async rateMovie(sessionId, movieId, raiting) {
