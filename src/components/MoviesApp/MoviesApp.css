@@ -4,6 +4,9 @@
     max-width: 1010px;
     background-color: inherit;
 }
+.moviesApp > ul:first-child {
+    margin-bottom: 19px;
+}
 .moviesApp > input {
     margin-bottom: 36px;
 }

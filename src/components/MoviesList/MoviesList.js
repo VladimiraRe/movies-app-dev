@@ -64,12 +64,12 @@ export default class MoviesList extends Component {
                     isLoaded: true,
                     appPage: 1,
                 },
-                () => this.setMovies(1, true)
+                () => this.setMovies(1)
             );
         }
 
         if (currentSearch && prevProps.search !== currentSearch) {
-            this.setState({ appPage: 1, isLoaded: true }, () => this.setMovies(1, true));
+            this.setState({ appPage: 1, isLoaded: true }, () => this.setMovies(1));
         }
     }
 
@@ -77,67 +77,107 @@ export default class MoviesList extends Component {
         const {
             sessionId,
             settings: { numberOfRequests, serverSize, serverLimit },
+            type,
         } = this.props;
-
         const compileState = { serverData: [] };
+
+        const fetch = async (i, fn) => {
+            await method(sessionId, page + i).then((res) => {
+                if (isNew && i === 0) {
+                    const totalResults =
+                        res.totalPages <= serverLimit ? res.totalPages * serverSize : serverLimit * serverSize;
+                    compileState.totalResults = totalResults;
+                }
+                compileState.serverData = [...compileState.serverData, ...res.data];
+                return fn ? fn() : null;
+            });
+        };
+
+        const renderState = async (fn) => {
+            const res = await fn()
+                .then(() => {
+                    return compileState;
+                })
+                .catch(() =>
+                    this.setState({
+                        data: false,
+                        isLoaded: false,
+                    })
+                );
+            return res;
+        };
+
+        if (type === 'rated') {
+            const newState = await renderState(async () => fetch(0));
+            return newState;
+        }
+
         const requests = [];
         // eslint-disable-next-line no-plusplus
         for (let i = 0; i < numberOfRequests; i++) {
             if (page + i <= serverLimit) {
                 requests.push(
                     new Promise((resolve) => {
-                        method(sessionId, page + i).then((res) => {
-                            if (isNew && i === 0) {
-                                const totalResults =
-                                    res.totalPages <= serverLimit
-                                        ? res.totalPages * serverSize
-                                        : serverLimit * serverSize;
-                                compileState.totalResults = totalResults;
-                            }
-                            compileState.serverData = [...compileState.serverData, ...res.data];
-                            return resolve();
-                        });
+                        fetch(i, resolve);
                     })
                 );
             }
         }
-        const newState = await Promise.all(requests)
-            .then(() => {
-                return compileState;
-            })
-            .catch(() =>
-                this.setState({
-                    data: false,
-                    isLoaded: false,
-                })
-            );
+
+        const newState = await renderState(() => {
+            return Promise.all(requests);
+        });
+
         return newState;
     };
 
     setMovies = async (newPage, oldPage) => {
         const { method } = this.state;
-        const { appSize, numberOfMoviesInRequest, numberOfRequests } = this.props.settings;
+        const {
+            type,
+            settings: { appSize, numberOfMoviesInRequest, numberOfRequests },
+        } = this.props;
+
+        const needNewServerData = (page, start) => {
+            this.setState({ isLoaded: true }, async () => {
+                const newState = await this.getMovies(method, page, !oldPage);
+                const { serverData } = newState;
+                newState.isLoaded = false;
+                newState.data = serverData.slice(start, start + appSize);
+                this.setState(newState);
+            });
+        };
+
+        const useSameServerData = (start) => {
+            const newState = { isLoaded: false };
+            const { serverData } = this.state;
+            newState.data = serverData.slice(start, start + appSize);
+            this.setState(newState);
+        };
+
+        if (type === 'rated' && !oldPage && newPage) {
+            const dataStart = 0;
+            needNewServerData(false, dataStart);
+            return;
+        }
+
+        if (type === 'rated' && oldPage && newPage) {
+            const dataStart = (newPage - 1) * appSize + 1;
+            useSameServerData(dataStart);
+            return;
+        }
 
         const oldRequest = Math.ceil((oldPage * appSize) / numberOfMoviesInRequest);
         const newRequest = Math.ceil((newPage * appSize) / numberOfMoviesInRequest);
         const dataStart = (newPage - 1) * appSize - (newRequest - 1) * numberOfMoviesInRequest;
 
         if (oldRequest === newRequest) {
-            const newState = { isLoaded: false };
-            const { serverData } = this.state;
-            newState.data = serverData.slice(dataStart, dataStart + appSize);
-            this.setState(newState);
+            useSameServerData(dataStart);
             return;
         }
 
         if (oldRequest !== newRequest || (!oldPage && newRequest)) {
-            this.setState({ isLoaded: true }, async () => {
-                const newState = await this.getMovies(method, numberOfRequests * (newRequest - 1) + 1, !oldPage);
-                const { serverData } = newState;
-                newState.isLoaded = false;
-                newState.data = serverData.slice(dataStart, dataStart + appSize);
-                this.setState(newState);
-            });
+            needNewServerData(numberOfRequests * (newRequest - 1) + 1, dataStart);
         }
     };
 

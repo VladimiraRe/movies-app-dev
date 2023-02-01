@@ -3,6 +3,10 @@ export default class TheMovieDB {
 
     _apiKey = 'b9a650f12ff7d9fcf25e0ad6d4fc0d66';
 
+    serverSize = 20;
+
+    serverLimit = 500;
+
     async searchMovies(sessionId, request, page) {
         const method = '/search/movie';
         const res = await this._get(method, page, request);
@@ -19,8 +23,8 @@ export default class TheMovieDB {
 
     async getRatedMovies(sessionId) {
         const res = await this._getRatedMoviesAllFields(sessionId);
-        const transformRes = await this._transformData(res.results);
-        return { data: transformRes, totalPages: res.total_pages };
+        const transformRes = await this._transformData(res);
+        return { data: transformRes, totalPages: res.length / this.serverSize };
     }
 
     async rateMovie(sessionId, movieId, raiting) {
@@ -86,7 +90,7 @@ export default class TheMovieDB {
             poster: movie.poster_path,
             date: movie.release_date,
             description: movie.overview,
-            voteAverage: movie.vote_average,
+            voteAverage: +movie.vote_average.toFixed(1),
             rating: !sessionId ? movie.rating : rating,
         }));
 

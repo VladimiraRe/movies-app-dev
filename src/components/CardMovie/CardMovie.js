@@ -39,13 +39,15 @@ export default class CardMovie extends Component {
         const { rating } = this.state;
 
         const { Text, Paragraph, Title } = Typography;
-        const ellipsisText = {
-            rows: 6,
-            expandable: false,
-        };
-        const ellipsisTitle = {
-            rows: 3,
-            expandable: false,
+        const ellipsis = {
+            text: {
+                rows: 6,
+                expandable: false,
+            },
+            title: {
+                rows: 3,
+                expandable: false,
+            },
         };
 
         const tags = ['action', 'drama'];
@@ -68,18 +70,34 @@ export default class CardMovie extends Component {
             ? intlFormat(parseISO(date), { month: 'short', day: 'numeric', year: 'numeric' }, { locale: 'en-US' })
             : '';
 
+        let voteScale;
+        if (voteAverage >= 0 && voteAverage <= 3) {
+            voteScale = { borderColor: '#E90000' };
+        }
+        if (voteAverage > 3 && voteAverage <= 5) {
+            voteScale = { borderColor: '#E97E00' };
+        }
+        if (voteAverage > 5 && voteAverage <= 7) {
+            voteScale = { borderColor: '#E9D100' };
+        }
+        if (voteAverage > 7 && voteAverage <= 10) {
+            voteScale = { borderColor: '#66E900' };
+        }
+
         return (
             <Card style={{ height: '279px' }} className='cardMovie' cover={cover}>
                 <div className='cardMovie__header'>
-                    <Title ellipsis={ellipsisTitle} level={5}>
+                    <Title ellipsis={ellipsis.title} level={5}>
                         {title}
                     </Title>
-                    <span className='cardMovie__vote'>{voteAverage}</span>
+                    <span className='cardMovie__vote' style={voteScale}>
+                        {voteAverage}
+                    </span>
                 </div>
                 {date && <Text type='secondary'>{formatDate}</Text>}
                 {tagsArr && <Space>{tagsArr}</Space>}
                 {description && (
-                    <Paragraph className='cardMovie__description' ellipsis={ellipsisText}>
+                    <Paragraph className='cardMovie__description' ellipsis={ellipsis.text}>
                         <p>{description}</p>
                     </Paragraph>
                 )}

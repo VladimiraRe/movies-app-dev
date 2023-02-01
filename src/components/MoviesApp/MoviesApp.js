@@ -5,6 +5,7 @@ import lodashDebounce from 'lodash.debounce';
 
 import TheMovieDB from '../../requests/TheMovieDB';
 import MoviesList from '../MoviesList';
+import Menu from '../Menu';
 import './MoviesApp.css';
 
 export default class MoviesApp extends Component {
@@ -35,9 +36,9 @@ export default class MoviesApp extends Component {
     componentDidMount() {
         this.settings.numberOfMoviesInRequest = MoviesApp.numberOfMoviesInRequest(
             this.settings.appSize,
-            this.settings.serverSize
+            this.theMovieDB.serverSize
         );
-        this.settings.numberOfRequests = this.settings.numberOfMoviesInRequest / this.settings.serverSize;
+        this.settings.numberOfRequests = this.settings.numberOfMoviesInRequest / this.theMovieDB.serverSize;
         this.enterGuestSession();
     }
 
@@ -58,6 +59,10 @@ export default class MoviesApp extends Component {
         debobounce();
     };
 
+    changeType = (type) => {
+        this.setState({ type });
+    };
+
     enterGuestSession = async () => {
         const { localStorage } = this.settings;
         let guestSessionId = localStorage.getItem('guestSessionId');
@@ -71,7 +76,10 @@ export default class MoviesApp extends Component {
 
     render() {
         const { search, inputValue, isOnline, guestSessionId, type } = this.state;
-        const { localStorage, ...settings } = this.settings;
+        const { localStorage, ...appSettings } = this.settings;
+        const { serverSize, serverLimit } = this.theMovieDB;
+        const settings = { ...appSettings, serverSize, serverLimit };
+
         if (isOnline) {
             window.addEventListener('offline', () => this.setState({ isOnline: false }));
         } else {
@@ -88,6 +96,7 @@ export default class MoviesApp extends Component {
                         guestSessionId={guestSessionId}
                         type={type}
                         settings={settings}
+                        changeType={this.changeType}
                     />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
@@ -97,10 +106,11 @@ export default class MoviesApp extends Component {
     }
 }
 
-function Content({ search, value, inputFunc, type, guestSessionId, settings }) {
+function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType }) {
     return (
         <>
-            <Input onChange={inputFunc} placeholder='Type to search...' value={value} />
+            <Menu onClick={changeType} type={type} />
+            {type !== 'rated' && <Input onChange={inputFunc} placeholder='Type to search...' value={value} />}
             <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
         </>
     );
