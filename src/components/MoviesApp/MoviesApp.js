@@ -4,6 +4,7 @@ import { Layout, Alert, Input } from 'antd';
 import lodashDebounce from 'lodash.debounce';
 
 import TheMovieDB from '../../requests/TheMovieDB';
+import GenresContext from '../../contexts/GenresContext';
 import MoviesList from '../MoviesList';
 import Menu from '../Menu';
 import './MoviesApp.css';
@@ -40,6 +41,15 @@ export default class MoviesApp extends Component {
         );
         this.settings.numberOfRequests = this.settings.numberOfMoviesInRequest / this.theMovieDB.serverSize;
         this.enterGuestSession();
+        // eslint-disable-next-line no-unused-vars
+        this.theMovieDB
+            .getGenres()
+            .then((genres) => {
+                this.setState({ genres });
+            })
+            .catch(() => {
+                this.setState({ genres: [] });
+            });
     }
 
     changeValue = (value, e) => {
@@ -75,7 +85,7 @@ export default class MoviesApp extends Component {
     };
 
     render() {
-        const { search, inputValue, isOnline, guestSessionId, type } = this.state;
+        const { search, inputValue, isOnline, guestSessionId, type, genres } = this.state;
         const { localStorage, ...appSettings } = this.settings;
         const { serverSize, serverLimit } = this.theMovieDB;
         const settings = { ...appSettings, serverSize, serverLimit };
@@ -97,6 +107,7 @@ export default class MoviesApp extends Component {
                         type={type}
                         settings={settings}
                         changeType={this.changeType}
+                        genres={genres}
                     />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
@@ -106,12 +117,14 @@ export default class MoviesApp extends Component {
     }
 }
 
-function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType }) {
+function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType, genres }) {
     return (
         <>
             <Menu onClick={changeType} type={type} />
             {type !== 'rated' && <Input onChange={inputFunc} placeholder='Type to search...' value={value} />}
-            <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
+            <GenresContext.Provider value={genres}>
+                <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
+            </GenresContext.Provider>
         </>
     );
 }

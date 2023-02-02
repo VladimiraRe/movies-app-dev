@@ -1,11 +1,14 @@
 import { Component } from 'react';
-import { Typography, Tag, Card, Space, Skeleton, Rate } from 'antd';
+import { Typography, Tag, Card, Skeleton, Rate } from 'antd';
 import { v1 as uuidv1 } from 'uuid';
 import { intlFormat, parseISO } from 'date-fns';
 
+import GenresContext from '../../contexts/GenresContext';
 import './CardMovie.css';
 
 export default class CardMovie extends Component {
+    static contextType = GenresContext;
+
     state = {
         rating: null,
     };
@@ -14,6 +17,7 @@ export default class CardMovie extends Component {
         const {
             movie: { rating },
         } = this.props;
+
         this.setState({ rating: +rating });
     }
 
@@ -29,7 +33,7 @@ export default class CardMovie extends Component {
 
     render() {
         const {
-            movie: { title, poster, date, description, voteAverage },
+            movie: { title, poster, date, description, voteAverage, genreIds },
             baseImgUrl,
             onChangeRating,
         } = this.props;
@@ -41,20 +45,26 @@ export default class CardMovie extends Component {
         const { Text, Paragraph, Title } = Typography;
         const ellipsis = {
             text: {
-                rows: 6,
+                rows: 4,
                 expandable: false,
             },
             title: {
-                rows: 3,
+                expandable: false,
+            },
+            tags: {
+                rows: 2,
                 expandable: false,
             },
         };
 
-        const tags = ['action', 'drama'];
-        const tagsArr = tags.map((tag) => {
-            return (
+        const { genres } = this.context;
+        const tags = [];
+        genreIds.forEach((genreId) => {
+            const foundGenre = genres.find((genre) => genre.id === genreId);
+            if (!foundGenre) return;
+            tags.push(
                 <Tag style={{ textTransform: 'capitalize' }} key={uuidv1()}>
-                    {tag}
+                    {foundGenre.name}
                 </Tag>
             );
         });
@@ -95,7 +105,11 @@ export default class CardMovie extends Component {
                     </span>
                 </div>
                 {date && <Text type='secondary'>{formatDate}</Text>}
-                {tagsArr && <Space>{tagsArr}</Space>}
+                {tags && (
+                    <Paragraph className='cardMovie__tags' ellipsis={ellipsis.tags}>
+                        <p>{tags}</p>
+                    </Paragraph>
+                )}
                 {description && (
                     <Paragraph className='cardMovie__description' ellipsis={ellipsis.text}>
                         <p>{description}</p>

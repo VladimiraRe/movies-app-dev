@@ -1,3 +1,11 @@
 .movieList__pagination {
     text-align: center;
 }
+.movieList > div > div > div > div > div > .movieList__item {
+    padding: 0 18px;
+}
+@media (max-width: 575px) {
+    .movieList > div > div > div > div > div > .movieList__item {
+        padding: 0;
+    }
+}

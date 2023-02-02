@@ -19,6 +19,7 @@
     flex-direction: column;
     row-gap: 7px;
     max-width: 60%;
+    justify-content: space-between;
 }
 .cardMovie > div:last-child::before,
 .cardMovie > div:last-child::after {
@@ -75,4 +76,17 @@
     justify-content: center;
     font-size: 12px;
     line-height: 22px;
+    flex-shrink: 0;
+}
+.cardMovie > div > .cardMovie__tags {
+    margin-bottom: -5px;
+}
+.cardMovie__tags > p > span {
+    margin-bottom: 5px;
+}
+.cardMovie__tags > p {
+    margin-bottom: -5px;
+}
+.cardMovie__tags > p > span:not(:last-child) {
+    margin-right: 5px;
 }

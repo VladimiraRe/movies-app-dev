@@ -41,6 +41,12 @@ export default class TheMovieDB {
         return res.guest_session_id;
     }
 
+    async getGenres() {
+        const method = '/genre/movie/list';
+        const res = this._get(method);
+        return res;
+    }
+
     async getConfiguration() {
         const res = await this._get('/configuration');
         return res;
@@ -91,6 +97,7 @@ export default class TheMovieDB {
             date: movie.release_date,
             description: movie.overview,
             voteAverage: +movie.vote_average.toFixed(1),
+            genreIds: movie.genre_ids,
             rating: !sessionId ? movie.rating : rating,
         }));
 

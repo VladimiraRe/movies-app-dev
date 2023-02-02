@@ -226,11 +226,11 @@ function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResult
     return (
         <>
             <List
-                grid={{ gutter: 16, column: 2, xs: 1 }}
+                grid={{ column: 2, xs: 1 }}
                 className='movieList'
                 dataSource={data}
                 renderItem={(item) => (
-                    <Item>
+                    <Item className='movieList__item'>
                         <CardMovie
                             movie={item}
                             baseImgUrl={baseImgUrl}
