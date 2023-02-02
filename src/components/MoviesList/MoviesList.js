@@ -2,17 +2,19 @@ import { Component } from 'react';
 import { List, Spin, Alert, Pagination } from 'antd';
 
 import CardMovie from '../CardMovie';
-import TheMovieDB from '../../requests/TheMovieDB';
+import MovieDbContext from '../../contexts/MovieDbContext';
 import './MovieList.css';
 
 export default class MoviesList extends Component {
+    static contextType = MovieDbContext;
+
     static numberOfMoviesInRequest = (x, y) => {
         const gcd = (a, b) => (a % b === 0 ? b : gcd(b, a % b));
         const scm = (a, b) => (a * b) / gcd(a, b);
         return scm(x, y);
     };
 
-    theMovieDB = new TheMovieDB();
+    theMovieDB = this.context;
 
     method = {
         popular: (sessionId, serverPage) => this.theMovieDB.getPopularMovies(sessionId, serverPage),

@@ -5,6 +5,7 @@ import lodashDebounce from 'lodash.debounce';
 
 import TheMovieDB from '../../requests/TheMovieDB';
 import GenresContext from '../../contexts/GenresContext';
+import MovieDbContext from '../../contexts/MovieDbContext';
 import MoviesList from '../MoviesList';
 import Menu from '../Menu';
 import './MoviesApp.css';
@@ -107,7 +108,7 @@ export default class MoviesApp extends Component {
                         type={type}
                         settings={settings}
                         changeType={this.changeType}
-                        genres={genres}
+                        context={{ genres, theMovieDB: this.theMovieDB }}
                     />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
@@ -117,13 +118,15 @@ export default class MoviesApp extends Component {
     }
 }
 
-function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType, genres }) {
+function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType, context }) {
     return (
         <>
             <Menu onClick={changeType} type={type} />
             {type !== 'rated' && <Input onChange={inputFunc} placeholder='Type to search...' value={value} />}
-            <GenresContext.Provider value={genres}>
-                <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
+            <GenresContext.Provider value={context.genres}>
+                <MovieDbContext.Provider value={context.theMovieDB}>
+                    <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
+                </MovieDbContext.Provider>
             </GenresContext.Provider>
         </>
     );
