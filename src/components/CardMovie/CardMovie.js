@@ -31,11 +31,18 @@ export default class CardMovie extends Component {
         }
     }
 
+    changeRating = (rating) => {
+        this.setState(({ oldRating }) => {
+            if (rating === oldRating) return false;
+            this.props.onChangeRating(rating, +rating === 0);
+            return { rating };
+        });
+    };
+
     render() {
         const {
             movie: { title, poster, date, description, voteAverage, genreIds },
             baseImgUrl,
-            onChangeRating,
         } = this.props;
 
         if (!title) return null;
@@ -70,7 +77,7 @@ export default class CardMovie extends Component {
         });
 
         let cover;
-        if (baseImgUrl === false || !poster) {
+        if (!baseImgUrl || !poster) {
             cover = <Skeleton.Image className='cardMovie__skeletonImg' />;
         } else {
             cover = <img alt={title} src={baseImgUrl + poster} />;
@@ -117,7 +124,7 @@ export default class CardMovie extends Component {
                 )}
                 <Rate
                     className='cardMovie__ownRating'
-                    onChange={(value) => onChangeRating(value)}
+                    onChange={(value) => this.changeRating(value)}
                     allowHalf
                     count={10}
                     value={rating}

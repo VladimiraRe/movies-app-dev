@@ -7,31 +7,62 @@ export default class TheMovieDB {
 
     serverLimit = 500;
 
-    async searchMovies(sessionId, request, page) {
+    async searchMovies(request, page, ratedMovies) {
         const method = '/search/movie';
         const res = await this._get(method, page, request);
-        const transformRes = await this._transformData(res.results, sessionId);
-        return { data: transformRes, totalPages: res.total_pages };
+        const transformRes = await TheMovieDB._transformData(res.results, ratedMovies);
+        return { data: transformRes, totalPages: res.total_pages, totalResults: res.total_results };
     }
 
-    async getPopularMovies(sessionId, page) {
+    async getPopularMovies(page, ratedMovies) {
         const method = '/movie/popular';
         const res = await this._get(method, page);
-        const transformRes = await this._transformData(res.results, sessionId);
-        return { data: transformRes, totalPages: res.total_pages };
+        const transformRes = await TheMovieDB._transformData(res.results, ratedMovies);
+        return { data: transformRes, totalPages: res.total_pages, totalResults: res.total_results };
     }
 
-    async getRatedMovies(sessionId) {
-        const res = await this._getRatedMoviesAllFields(sessionId);
-        const transformRes = await this._transformData(res);
-        return { data: transformRes, totalPages: res.length / this.serverSize };
+    async getRatedMovies(sessionId, page) {
+        const method = `/guest_session/${sessionId}/rated/movies`;
+        const getData = async (pageNumber, fn, definite) => {
+            const res = await this._get(method, pageNumber);
+            const transformRes = await TheMovieDB._transformData(res.results);
+            let data = transformRes;
+            if (pageNumber === 1 || definite) {
+                data = { data };
+                data.totalPages = res.total_pages;
+            }
+            return fn ? fn(data) : data;
+        };
+
+        if (page) {
+            const ratedMovies = await getData(page, false, true);
+            return ratedMovies;
+        }
+
+        const ratedMovies = await getData(1);
+        if (ratedMovies.totalPages === 1) return ratedMovies;
+        const arr = [];
+        for (let i = 2; i <= ratedMovies.totalPages; i++) {
+            arr.push(
+                new Promise((resolve) => {
+                    getData(i, resolve);
+                }).then((r) => {
+                    ratedMovies.data = [...ratedMovies.data, ...r];
+                })
+            );
+        }
+
+        await Promise.all(arr);
+        return ratedMovies.data;
     }
 
-    async rateMovie(sessionId, movieId, raiting) {
+    async rateMovie(sessionId, movieId, raiting, isNeedToDlete) {
         const method = `/movie/${movieId}/rating`;
         const headers = { 'Content-Type': 'application/json;charset=utf-8' };
         const data = { value: raiting };
-        const res = await this._post(method, data, sessionId, headers);
+        const res = !isNeedToDlete
+            ? await this._post(method, data, sessionId, headers)
+            : await this._delete(method, sessionId, headers);
         return res;
     }
 
@@ -64,8 +95,8 @@ export default class TheMovieDB {
 
     async _get(method, page, request) {
         let url = `${this._baseApi}${method}?api_key=${this._apiKey}`;
-        if (page) url += `&page=${page}`;
         if (request) url += `&query=${request}`;
+        if (page) url += `&page=${page}`;
 
         let res = await fetch(url).catch((err) => {
             throw err;
@@ -87,40 +118,42 @@ export default class TheMovieDB {
         return true;
     }
 
-    async _transformData(data, sessionId) {
-        const rating = null;
-
-        const res = data.map((movie) => ({
-            id: movie.id,
-            title: movie.title,
-            poster: movie.poster_path,
-            date: movie.release_date,
-            description: movie.overview,
-            voteAverage: +movie.vote_average.toFixed(1),
-            genreIds: movie.genre_ids,
-            rating: !sessionId ? movie.rating : rating,
-        }));
-
-        if (sessionId) {
-            const ownRating = await this._getRatedMoviesAllFields(sessionId);
-            ownRating.forEach((movieWithRating) => {
-                res.filter((movie) => {
-                    if (movie.id === movieWithRating.id) {
-                        // eslint-disable-next-line no-param-reassign
-                        movie.rating = movieWithRating.rating;
-                        return true;
-                    }
-                    return false;
-                });
-            });
-        }
-
-        return res;
+    async _delete(method, sessionId, headers) {
+        let url = `${this._baseApi}${method}?api_key=${this._apiKey}`;
+        if (sessionId) url += `&guest_session_id=${sessionId}`;
+        const obj = { method: 'DELETE' };
+        if (headers) obj.headers = headers;
+        const res = await fetch(url, obj);
+        if (!res.ok) throw new Error(`Couldn't fetch ${url}, response status: ${res.status}`);
+        return true;
     }
 
-    async _getRatedMoviesAllFields(sessionId) {
+    static _transformData(data, ratedMovies) {
+        const movies = data.map((movie) => {
+            const newMovieData = {
+                id: movie.id,
+                title: movie.title,
+                poster: movie.poster_path,
+                date: movie.release_date,
+                description: movie.overview,
+                voteAverage: +movie.vote_average.toFixed(1),
+                genreIds: movie.genre_ids,
+            };
+            if (ratedMovies) {
+                const findObj = ratedMovies.find((el) => el.id === movie.id);
+                newMovieData.rating = findObj ? findObj.rating : null;
+            }
+            if (!ratedMovies) {
+                newMovieData.rating = movie.rating || null;
+            }
+            return newMovieData;
+        });
+        return movies;
+    }
+
+    async _getRatedMoviesAllFields(sessionId, page) {
         const method = `/guest_session/${sessionId}/rated/movies`;
-        const res = await this._get(method);
-        return res.results;
+        const res = await this._get(method, page).catch(() => false);
+        return res;
     }
 }

@@ -69,7 +69,9 @@
             "classes": true,
             "variables": true,
             "allowNamedExports": false
-        }]
+        }],
+        //allow unary operators ++ and -- in the afterthought (final expression) of a for loop
+        "no-plusplus": ["error", { "allowForLoopAfterthoughts": true }]
     },
     "settings": {
         "import/resolver": { //settings of eslint-plugin-import

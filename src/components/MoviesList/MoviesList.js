@@ -17,108 +17,85 @@ export default class MoviesList extends Component {
     theMovieDB = this.context;
 
     method = {
-        popular: (sessionId, serverPage) => this.theMovieDB.getPopularMovies(sessionId, serverPage),
-        search: (sessionId, serverPage) => this.theMovieDB.searchMovies(sessionId, serverPage),
+        popular: (serverPage, ratedMovies) => this.theMovieDB.getPopularMovies(serverPage, ratedMovies),
+        search: (serverPage, ratedMovies) => this.theMovieDB.searchMovies(this.props.search, serverPage, ratedMovies),
         rated: (sessionId) => this.theMovieDB.getRatedMovies(sessionId),
     };
 
     state = {
-        isLoaded: true,
+        isLoaded: false,
         data: [],
         serverData: [],
-        baseImgUrl: '',
         appPage: 1,
-        totalResults: null,
+        totalResults: 0,
         method: null,
     };
 
-    async componentDidMount() {
-        const { type } = this.props;
-
-        await this.theMovieDB
-            .getBaseImgUrl()
-            .then((baseImgUrl) => {
-                this.setState(
-                    {
-                        method: this.method[type],
-                        appPage: 1,
-                        baseImgUrl,
-                    },
-                    () => this.setMovies(1)
-                );
-            })
-            .catch(() => {
-                this.setState({
-                    baseImgUrl: false,
-                });
-            });
-    }
-
     componentDidUpdate(prevProps) {
-        let { search: currentSearch } = this.props;
-        const { type: currentType } = this.props;
-        currentSearch = currentSearch.split(' ').join('');
+        const { type, search, ratedMovies } = this.props;
 
-        if (currentType !== prevProps.type) {
+        if (type !== prevProps.type) {
             this.setState(
                 {
-                    method: this.method[currentType],
-                    isLoaded: true,
+                    method: this.method[type],
+                    isLoaded: false,
                     appPage: 1,
                 },
                 () => this.setMovies(1)
             );
         }
 
-        if (currentSearch && prevProps.search !== currentSearch) {
-            this.setState({ appPage: 1, isLoaded: true }, () => this.setMovies(1));
+        if (search !== prevProps.search) {
+            this.setState({ appPage: 1, isLoaded: false }, () => this.setMovies(1));
+        }
+
+        if (type === 'rated' && type === prevProps.type && ratedMovies.length !== prevProps.ratedMovies.length) {
+            const {
+                settings: { appSize },
+            } = this.props;
+            const { appPage } = this.state;
+            const newAppPage = Math.ceil(ratedMovies.length / appSize);
+            this.setMovies(newAppPage, false, newAppPage !== appPage);
         }
     }
 
-    getMovies = async (method, page, isNew) => {
+    getMovies = async (method, page) => {
         const {
-            sessionId,
-            settings: { numberOfRequests, serverSize, serverLimit },
-            type,
+            settings: { numberOfRequests, serverLimit, serverSize },
+            ratedMovies,
         } = this.props;
-        const compileState = { serverData: [] };
+        const newState = { serverData: [] };
+        let { totalPages } = this.state;
+        let start = 0;
 
         const fetch = async (i, fn) => {
-            await method(sessionId, page + i).then((res) => {
-                if (isNew && i === 0) {
-                    const totalResults =
-                        res.totalPages <= serverLimit ? res.totalPages * serverSize : serverLimit * serverSize;
-                    compileState.totalResults = totalResults;
+            await method(page + i, ratedMovies).then((r) => {
+                if (page + i === 1) {
+                    if (r.totalPages <= serverLimit) {
+                        newState.totalPages = r.totalPages;
+                        newState.totalResults = r.totalResults;
+                    }
+                    if (r.totalPages > serverLimit) {
+                        newState.totalPages = serverLimit;
+                        newState.totalResults = serverLimit * serverSize;
+                    }
                 }
-                compileState.serverData = [...compileState.serverData, ...res.data];
-                return fn ? fn() : null;
+                newState.serverData = [...newState.serverData, ...r.data];
+                return fn ? fn(newState.totalPages) : null;
             });
         };
 
-        const renderState = async (fn) => {
-            const res = await fn()
-                .then(() => {
-                    return compileState;
-                })
-                .catch(() =>
-                    this.setState({
-                        data: false,
-                        isLoaded: false,
-                    })
-                );
-            return res;
-        };
-
-        if (type === 'rated') {
-            const newState = await renderState(async () => fetch(0));
-            return newState;
+        if (page === 1 && start === 0) {
+            await fetch(start, (maxPage) => {
+                totalPages = maxPage;
+            });
+            start += 1;
         }
 
-        const requests = [];
-        // eslint-disable-next-line no-plusplus
-        for (let i = 0; i < numberOfRequests; i++) {
-            if (page + i <= serverLimit) {
-                requests.push(
+        const promises = [];
+        for (let i = start; i < numberOfRequests; i++) {
+            if (page + i <= totalPages) {
+                promises.push(
                     new Promise((resolve) => {
                         fetch(i, resolve);
                     })
@@ -126,46 +103,43 @@ export default class MoviesList extends Component {
             }
         }
 
-        const newState = await renderState(() => {
-            return Promise.all(requests);
-        });
-
+        await Promise.all(promises);
         return newState;
     };
 
-    setMovies = async (newPage, oldPage) => {
-        const { method } = this.state;
+    setMovies = async (newPage, oldPage, isNewAppPage) => {
+        const { method, serverData } = this.state;
         const {
             type,
             settings: { appSize, numberOfMoviesInRequest, numberOfRequests },
         } = this.props;
 
-        const needNewServerData = (page, start) => {
-            this.setState({ isLoaded: true }, async () => {
-                const newState = await this.getMovies(method, page, !oldPage);
-                const { serverData } = newState;
-                newState.isLoaded = false;
-                newState.data = serverData.slice(start, start + appSize);
-                this.setState(newState);
+        const dataGeneration = (start, data) => {
+            return data.slice(start, start + appSize);
+        };
+
+        const needNewServerData = async (page, start) => {
+            this.setState({ isLoaded: false }, async () => {
+                await this.getMovies(method, page)
+                    .then((r) => this.setState({ ...r, data: dataGeneration(start, r.serverData), isLoaded: true }))
+                    .catch(() => this.setState({ isLoaded: true, data: [] }));
             });
         };
 
-        const useSameServerData = (start) => {
-            const newState = { isLoaded: false };
-            const { serverData } = this.state;
-            newState.data = serverData.slice(start, start + appSize);
-            this.setState(newState);
-        };
-
-        if (type === 'rated' && !oldPage && newPage) {
-            const dataStart = 0;
-            needNewServerData(false, dataStart);
-            return;
-        }
-
-        if (type === 'rated' && oldPage && newPage) {
-            const dataStart = (newPage - 1) * appSize + 1;
-            useSameServerData(dataStart);
+        if (type === 'rated' && newPage) {
+            const dataStart = (newPage - 1) * appSize;
+            if (!oldPage) {
+                const { ratedMovies } = this.props;
+                const newState = { serverData: ratedMovies };
+                newState.totalResults = ratedMovies.length;
+                newState.data = dataGeneration(dataStart, newState.serverData);
+                if (isNewAppPage) newState.appPage = newPage;
+                this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
+            }
+            if (oldPage) {
+                const data = dataGeneration(dataStart, serverData);
+                this.setState(({ isLoaded }) => (!isLoaded ? { data, isLoaded: true } : { data }));
+            }
             return;
         }
 
@@ -174,12 +148,13 @@ export default class MoviesList extends Component {
         const dataStart = (newPage - 1) * appSize - (newRequest - 1) * numberOfMoviesInRequest;
 
         if (oldRequest === newRequest) {
-            useSameServerData(dataStart);
+            const data = dataGeneration(dataStart, serverData);
+            this.setState(({ isLoaded }) => (!isLoaded ? { data, isLoaded: true } : { data }));
             return;
         }
 
         if (oldRequest !== newRequest || (!oldPage && newRequest)) {
-            needNewServerData(numberOfRequests * (newRequest - 1) + 1, dataStart);
+            await needNewServerData(numberOfRequests * (newRequest - 1) + 1, dataStart);
         }
     };
 
@@ -188,22 +163,28 @@ export default class MoviesList extends Component {
         this.setState({ appPage: newPage }, () => this.setMovies(newPage, appPage));
     };
 
-    changeRating = async (id, rating) => {
-        await this.theMovieDB.rateMovie(this.props.sessionId, id, rating);
+    changeRating = async (data, rating, isNeedToDelete) => {
+        const { changeRatedMovies } = this.props;
+        const id = isNeedToDelete ? data : data.id;
+
+        await this.theMovieDB.rateMovie(this.props.sessionId, id, rating, isNeedToDelete);
+        if (isNeedToDelete) changeRatedMovies(id, isNeedToDelete);
+        if (!isNeedToDelete) changeRatedMovies({ ...data, rating }, isNeedToDelete);
     };
 
     render() {
-        const { data, baseImgUrl, isLoaded, totalResults, appPage } = this.state;
+        const { data, isLoaded, totalResults, appPage } = this.state;
         const {
+            baseImgUrl,
             settings: { appSize },
         } = this.props;
         let res;
 
-        if (isLoaded) {
+        if (!isLoaded) {
             res = <Spin tip='Loading' />;
-        } else if (!data && !isLoaded) {
+        } else if (!data && isLoaded) {
             res = <Alert message='Oops' description='Sorry, something is wrong. Please try again later' type='error' />;
-        } else if (data.length === 0 && !isLoaded) {
+        } else if (data.length === 0 && isLoaded) {
             res = <Alert message='Nothing found for your request' type='warning' />;
         } else {
             res = (
@@ -236,7 +217,9 @@ function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResult
                         <CardMovie
                             movie={item}
                             baseImgUrl={baseImgUrl}
-                            onChangeRating={(rating) => changeRating(item.id, rating)}
+                            onChangeRating={(rating, isNeedToDelete) =>
+                                changeRating(!isNeedToDelete ? item : item.id, rating, isNeedToDelete)
+                            }
                         />
                     </Item>
                 )}

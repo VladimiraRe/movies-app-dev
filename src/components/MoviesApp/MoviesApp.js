@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 import { Component } from 'react';
 import { Layout, Alert, Input } from 'antd';
-import lodashDebounce from 'lodash.debounce';
+import { debounce } from 'lodash';
 
 import TheMovieDB from '../../requests/TheMovieDB';
 import GenresContext from '../../contexts/GenresContext';
@@ -22,71 +22,96 @@ export default class MoviesApp extends Component {
     settings = {
         localStorage: window.localStorage,
         appSize: 6,
-        serverSize: 20,
-        serverLimit: 500,
         numberOfMoviesInRequest: null,
         numberOfRequests: null,
     };
 
     state = {
-        inputValue: '',
         search: '',
+        input: '',
         isOnline: navigator.onLine,
-        type: 'popular',
     };
 
-    componentDidMount() {
+    async componentDidMount() {
         this.settings.numberOfMoviesInRequest = MoviesApp.numberOfMoviesInRequest(
             this.settings.appSize,
             this.theMovieDB.serverSize
         );
         this.settings.numberOfRequests = this.settings.numberOfMoviesInRequest / this.theMovieDB.serverSize;
-        this.enterGuestSession();
-        // eslint-disable-next-line no-unused-vars
-        this.theMovieDB
-            .getGenres()
-            .then((genres) => {
-                this.setState({ genres });
-            })
-            .catch(() => {
-                this.setState({ genres: [] });
-            });
+        this.debounceSearch = debounce((input) => this.startSearch(input), 2000);
+
+        const newState = { type: 'popular' };
+        newState.guestSessionId = await this.enterGuestSession();
+        newState.genres = await this.theMovieDB.getGenres().catch(() => []);
+        newState.baseImgUrl = await this.theMovieDB.getBaseImgUrl().catch(() => false);
+        newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId).catch(() => []);
+        this.setState(newState);
     }
 
-    changeValue = (value, e) => {
-        const newValue = e.target.value;
-        this.setState(({ search }) => {
-            if (!search === newValue) return false;
-            return { [value]: newValue };
+    componentDidUpdate(prevProps, prevState) {
+        const { input, type } = this.state;
+        if (prevState.input !== input && prevState.type === type) {
+            this.debounceSearch(input);
+        }
+    }
+
+    changeInput = (input) => {
+        this.setState({ input });
+    };
+
+    startSearch = (value) => {
+        const newValue = value.trim();
+        this.setState(({ search, type }) => {
+            if ((search === newValue && newValue !== '') || (newValue === '' && type === 'popular')) return false;
+            if (newValue === '' && type !== 'popular') return { type: 'popular' };
+            return type !== 'search' ? { search: newValue, type: 'search' } : { search: newValue };
         });
     };
 
-    changeSearch = (e) => {
-        this.changeValue('inputValue', e);
-        const debobounce = lodashDebounce(() => {
-            this.changeValue('search', e);
-            this.setState({ inputValue: '' });
-        }, 2000);
-        debobounce();
+    changeType = (newType) => {
+        this.setState(({ type, search, input }) => {
+            if (type === newType) return false;
+            const newState = { type: newType };
+            if (search !== '' && newType === 'popular') newState.search = '';
+            if (input !== '' && newType === 'popular') newState.input = '';
+            return newState;
+        });
     };
 
-    changeType = (type) => {
-        this.setState({ type });
+    changeRatedMovies = async (data, isNeedToDelete) => {
+        if (isNeedToDelete) {
+            this.setState(({ ratedMovies }) => ({ ratedMovies: ratedMovies.filter((el) => el.id !== data) }));
+            return;
+        }
+        this.setState(({ ratedMovies }) => {
+            let isNewMovie = true;
+            const newData = ratedMovies.map((el) => {
+                if (el.id !== data.id) return el;
+                isNewMovie = false;
+                return { ...el, rating: data.rating };
+            });
+            if (!isNewMovie) return { ratedMovies: newData };
+            return { ratedMovies: [...ratedMovies, data] };
+        });
     };
 
     enterGuestSession = async () => {
         const { localStorage } = this.settings;
         let guestSessionId = localStorage.getItem('guestSessionId');
         if (!guestSessionId) {
-            const value = await this.theMovieDB.createGuestSession();
-            localStorage.setItem('guestSessionId', value);
-            guestSessionId = localStorage.getItem('guestSessionId');
+            guestSessionId = await this.theMovieDB
+                .createGuestSession()
+                .then((value) => {
+                    localStorage.setItem('guestSessionId', value);
+                    return localStorage.getItem('guestSessionId');
+                })
+                .catch(() => '');
         }
-        this.setState({ guestSessionId });
+        return guestSessionId;
     };
 
     render() {
-        const { search, inputValue, isOnline, guestSessionId, type, genres } = this.state;
+        const { search, isOnline, guestSessionId, type, genres, input, baseImgUrl, ratedMovies } = this.state;
         const { localStorage, ...appSettings } = this.settings;
         const { serverSize, serverLimit } = this.theMovieDB;
         const settings = { ...appSettings, serverSize, serverLimit };
@@ -101,9 +126,12 @@ export default class MoviesApp extends Component {
             <Layout className='moviesApp'>
                 {isOnline ? (
                     <Content
-                        inputFunc={this.changeSearch}
+                        baseImgUrl={baseImgUrl}
+                        ratedMovies={ratedMovies}
+                        changeRatedMovies={this.changeRatedMovies}
+                        changeInput={this.changeInput}
+                        input={input}
                         search={search}
-                        value={inputValue}
                         guestSessionId={guestSessionId}
                         type={type}
                         settings={settings}
@@ -118,14 +146,36 @@ export default class MoviesApp extends Component {
     }
 }
 
-function Content({ search, value, inputFunc, type, guestSessionId, settings, changeType, context }) {
+function Content({
+    baseImgUrl,
+    ratedMovies,
+    changeRatedMovies,
+    search,
+    input,
+    type,
+    guestSessionId,
+    settings,
+    changeType,
+    context,
+    changeInput,
+}) {
     return (
         <>
             <Menu onClick={changeType} type={type} />
-            {type !== 'rated' && <Input onChange={inputFunc} placeholder='Type to search...' value={value} />}
+            {type !== 'rated' && (
+                <Input onChange={(e) => changeInput(e.target.value)} value={input} placeholder='Type to search...' />
+            )}
             <GenresContext.Provider value={context.genres}>
                 <MovieDbContext.Provider value={context.theMovieDB}>
-                    <MoviesList search={search} type={type} sessionId={guestSessionId} settings={settings} />
+                    <MoviesList
+                        baseImgUrl={baseImgUrl}
+                        ratedMovies={ratedMovies}
+                        changeRatedMovies={changeRatedMovies}
+                        search={search}
+                        type={type}
+                        sessionId={guestSessionId}
+                        settings={settings}
+                    />
                 </MovieDbContext.Provider>
             </GenresContext.Provider>
         </>
