@@ -4,6 +4,12 @@
 .movieList > div > div > div > div > div > .movieList__item {
     padding: 0 18px;
 }
+.movieList__alert-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+}
 @media (max-width: 575px) {
     .movieList > div > div > div > div > div > .movieList__item {
         padding: 0;

@@ -95,6 +95,18 @@ export default class MoviesApp extends Component {
         });
     };
 
+    getRatedMovies = async () => {
+        const { guestSessionId } = this.state;
+        try {
+            const res = await this.theMovieDB.getRatedMovies(guestSessionId);
+            this.setState({ ratedMovies: res });
+            return res;
+        } catch {
+            this.setState({ ratedMovies: [] });
+            return false;
+        }
+    };
+
     enterGuestSession = async () => {
         const { localStorage } = this.settings;
         let guestSessionId = localStorage.getItem('guestSessionId');
@@ -129,6 +141,7 @@ export default class MoviesApp extends Component {
                         baseImgUrl={baseImgUrl}
                         ratedMovies={ratedMovies}
                         changeRatedMovies={this.changeRatedMovies}
+                        getRatedMovies={this.getRatedMovies}
                         changeInput={this.changeInput}
                         input={input}
                         search={search}
@@ -150,6 +163,7 @@ function Content({
     baseImgUrl,
     ratedMovies,
     changeRatedMovies,
+    getRatedMovies,
     search,
     input,
     type,
@@ -171,6 +185,7 @@ function Content({
                         baseImgUrl={baseImgUrl}
                         ratedMovies={ratedMovies}
                         changeRatedMovies={changeRatedMovies}
+                        getRatedMovies={getRatedMovies}
                         search={search}
                         type={type}
                         sessionId={guestSessionId}

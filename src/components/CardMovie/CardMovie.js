@@ -31,12 +31,13 @@ export default class CardMovie extends Component {
         }
     }
 
-    changeRating = (rating) => {
-        this.setState(({ oldRating }) => {
-            if (rating === oldRating) return false;
-            this.props.onChangeRating(rating, +rating === 0);
-            return { rating };
-        });
+    changeRating = async (rating) => {
+        const { rating: oldRating } = this.state;
+        if (rating === oldRating) return;
+        this.setState({ rating });
+        const isSuccess = await this.props.onChangeRating(rating, +rating === 0);
+        if (isSuccess) return;
+        this.setState({ rating: oldRating });
     };
 
     render() {

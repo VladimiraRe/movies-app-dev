@@ -19,7 +19,7 @@ export default class MoviesList extends Component {
     method = {
         popular: (serverPage, ratedMovies) => this.theMovieDB.getPopularMovies(serverPage, ratedMovies),
         search: (serverPage, ratedMovies) => this.theMovieDB.searchMovies(this.props.search, serverPage, ratedMovies),
-        rated: (sessionId) => this.theMovieDB.getRatedMovies(sessionId),
+        rated: () => this.props.getRatedMovies(),
     };
 
     state = {
@@ -29,6 +29,7 @@ export default class MoviesList extends Component {
         appPage: 1,
         totalResults: 0,
         method: null,
+        isError: false,
     };
 
     componentDidUpdate(prevProps) {
@@ -43,10 +44,12 @@ export default class MoviesList extends Component {
                 },
                 () => this.setMovies(1)
             );
+            return;
         }
 
         if (search !== prevProps.search) {
             this.setState({ appPage: 1, isLoaded: false }, () => this.setMovies(1));
+            return;
         }
 
         if (type === 'rated' && type === prevProps.type && ratedMovies.length !== prevProps.ratedMovies.length) {
@@ -107,7 +110,7 @@ export default class MoviesList extends Component {
         return newState;
     };
 
-    setMovies = async (newPage, oldPage, isNewAppPage) => {
+    setMovies = async (newPage, oldPage) => {
         const { method, serverData } = this.state;
         const {
             type,
@@ -118,22 +121,16 @@ export default class MoviesList extends Component {
             return data.slice(start, start + appSize);
         };
 
-        const needNewServerData = async (page, start) => {
-            this.setState({ isLoaded: false }, async () => {
-                await this.getMovies(method, page)
-                    .then((r) => this.setState({ ...r, data: dataGeneration(start, r.serverData), isLoaded: true }))
-                    .catch(() => this.setState({ isLoaded: true, data: [] }));
-            });
-        };
-
         if (type === 'rated' && newPage) {
             const dataStart = (newPage - 1) * appSize;
             if (!oldPage) {
-                const { ratedMovies } = this.props;
-                const newState = { serverData: ratedMovies };
-                newState.totalResults = ratedMovies.length;
+                const ratedMovies = await method();
+                const newState = {
+                    serverData: ratedMovies,
+                    totalResults: ratedMovies.length,
+                    appPage: newPage,
+                };
                 newState.data = dataGeneration(dataStart, newState.serverData);
-                if (isNewAppPage) newState.appPage = newPage;
                 this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
             }
             if (oldPage) {
@@ -153,8 +150,16 @@ export default class MoviesList extends Component {
             return;
         }
 
+        const needNewServerData = async (start, page) => {
+            this.setState({ isLoaded: false }, async () => {
+                await this.getMovies(method, page)
+                    .then((r) => this.setState({ ...r, data: dataGeneration(start, r.serverData), isLoaded: true }))
+                    .catch(() => this.setState({ isLoaded: true, data: [] }));
+            });
+        };
+
         if (oldRequest !== newRequest || (!oldPage && newRequest)) {
-            await needNewServerData(numberOfRequests * (newRequest - 1) + 1, dataStart);
+            await needNewServerData(dataStart, numberOfRequests * (newRequest - 1) + 1);
         }
     };
 
@@ -167,13 +172,19 @@ export default class MoviesList extends Component {
         const { changeRatedMovies } = this.props;
         const id = isNeedToDelete ? data : data.id;
 
-        await this.theMovieDB.rateMovie(this.props.sessionId, id, rating, isNeedToDelete);
-        if (isNeedToDelete) changeRatedMovies(id, isNeedToDelete);
-        if (!isNeedToDelete) changeRatedMovies({ ...data, rating }, isNeedToDelete);
+        try {
+            await this.theMovieDB.rateMovie(this.props.sessionId, id, rating, isNeedToDelete);
+            if (isNeedToDelete) changeRatedMovies(id, isNeedToDelete);
+            if (!isNeedToDelete) changeRatedMovies({ ...data, rating }, isNeedToDelete);
+            return true;
+        } catch {
+            this.setState({ isError: true }, () => setTimeout(() => this.setState({ isError: false }), 5000));
+            return false;
+        }
     };
 
     render() {
-        const { data, isLoaded, totalResults, appPage } = this.state;
+        const { data, isLoaded, totalResults, appPage, isError } = this.state;
         const {
             baseImgUrl,
             settings: { appSize },
@@ -196,6 +207,7 @@ export default class MoviesList extends Component {
                     totalResults={totalResults}
                     appPage={appPage}
                     pageSize={appSize}
+                    isError={isError}
                 />
             );
         }
@@ -204,10 +216,13 @@ export default class MoviesList extends Component {
     }
 }
 
-function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResults, appPage, pageSize }) {
+function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResults, appPage, pageSize, isError }) {
     const { Item } = List;
     return (
         <>
+            {isError && (
+                <Alert className='movieList__alert-banner' type='error' message="Something's wrong, try again" banner />
+            )}
             <List
                 grid={{ column: 2, xs: 1 }}
                 className='movieList'
