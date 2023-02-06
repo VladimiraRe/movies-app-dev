@@ -27,9 +27,15 @@ export default class MoviesApp extends Component {
     };
 
     state = {
+        type: null,
         search: '',
         input: '',
         isOnline: navigator.onLine,
+        guestSessionId: null,
+        baseImgUrl: null,
+        genres: [],
+        ratedMovies: [],
+        error: { app: 0, moviesList: 0 },
     };
 
     async componentDidMount() {
@@ -41,10 +47,26 @@ export default class MoviesApp extends Component {
         this.debounceSearch = debounce((input) => this.startSearch(input), 2000);
 
         const newState = { type: 'popular' };
-        newState.guestSessionId = await this.enterGuestSession();
-        newState.genres = await this.theMovieDB.getGenres().catch(() => []);
-        newState.baseImgUrl = await this.theMovieDB.getBaseImgUrl().catch(() => false);
-        newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId).catch(() => []);
+        let error = 0;
+        newState.guestSessionId = await this.enterGuestSession().catch(() => {
+            error += 1;
+        });
+        newState.genres = await this.theMovieDB.getGenres().catch(() => {
+            error += 1;
+            return [];
+        });
+        newState.baseImgUrl = await this.theMovieDB.getBaseImgUrl().catch(() => {
+            error += 1;
+            return false;
+        });
+        newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId).catch(() => {
+            error += 1;
+            return [];
+        });
+        if (error > 0) {
+            const { error: stateError } = this.state;
+            newState.error = { ...stateError, app: error };
+        }
         this.setState(newState);
     }
 
@@ -54,6 +76,12 @@ export default class MoviesApp extends Component {
             this.debounceSearch(input);
         }
     }
+
+    changeError = (value, name) => {
+        this.setState(({ error }) => {
+            return { error: { ...error, [name]: error[name] + value } };
+        });
+    };
 
     changeInput = (input) => {
         this.setState({ input });
@@ -78,7 +106,7 @@ export default class MoviesApp extends Component {
         });
     };
 
-    changeRatedMovies = async (data, isNeedToDelete) => {
+    changeRatedMovies = (data, isNeedToDelete) => {
         if (isNeedToDelete) {
             this.setState(({ ratedMovies }) => ({ ratedMovies: ratedMovies.filter((el) => el.id !== data) }));
             return;
@@ -96,13 +124,17 @@ export default class MoviesApp extends Component {
     };
 
     getRatedMovies = async () => {
-        const { guestSessionId } = this.state;
+        const { guestSessionId, type } = this.state;
         try {
             const res = await this.theMovieDB.getRatedMovies(guestSessionId);
             this.setState({ ratedMovies: res });
             return res;
         } catch {
-            this.setState({ ratedMovies: [] });
+            if (type === 'rated') {
+                this.setState({ ratedMovies: [] });
+                return false;
+            }
+            this.setState(({ error }) => ({ ratedMovies: [], error: { ...error, app: error.app + 1 } }));
             return false;
         }
     };
@@ -117,13 +149,15 @@ export default class MoviesApp extends Component {
                     localStorage.setItem('guestSessionId', value);
                     return localStorage.getItem('guestSessionId');
                 })
-                .catch(() => '');
+                .catch((err) => {
+                    throw err;
+                });
         }
         return guestSessionId;
     };
 
     render() {
-        const { search, isOnline, guestSessionId, type, genres, input, baseImgUrl, ratedMovies } = this.state;
+        const { search, isOnline, guestSessionId, type, genres, input, baseImgUrl, ratedMovies, error } = this.state;
         const { localStorage, ...appSettings } = this.settings;
         const { serverSize, serverLimit } = this.theMovieDB;
         const settings = { ...appSettings, serverSize, serverLimit };
@@ -142,14 +176,16 @@ export default class MoviesApp extends Component {
                         ratedMovies={ratedMovies}
                         changeRatedMovies={this.changeRatedMovies}
                         getRatedMovies={this.getRatedMovies}
-                        changeInput={this.changeInput}
+                        changeType={this.changeType}
                         input={input}
                         search={search}
                         guestSessionId={guestSessionId}
                         type={type}
                         settings={settings}
-                        changeType={this.changeType}
+                        changeInput={this.changeInput}
+                        changeError={this.changeError}
                         context={{ genres, theMovieDB: this.theMovieDB }}
+                        error={error}
                     />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
@@ -169,12 +205,33 @@ function Content({
     type,
     guestSessionId,
     settings,
-    changeType,
-    context,
     changeInput,
+    changeError,
+    context,
+    changeType,
+    error,
 }) {
+    const allError = Object.values(error).reduce((acc, el) => {
+        return acc + el;
+    }, 0);
     return (
         <>
+            {allError > 0 && allError <= 2 && (
+                <Alert
+                    className='moviesApp__error-banner'
+                    message="The app doesn't work correctly, we recommend to restart it"
+                    banner
+                    closable
+                />
+            )}
+            {allError > 2 && (
+                <Alert
+                    className='moviesApp__error-banner'
+                    type='error'
+                    message='Critical bugs have been found, restart the app'
+                    banner
+                />
+            )}
             <Menu onClick={changeType} type={type} />
             {type !== 'rated' && (
                 <Input onChange={(e) => changeInput(e.target.value)} value={input} placeholder='Type to search...' />
@@ -190,6 +247,7 @@ function Content({
                         type={type}
                         sessionId={guestSessionId}
                         settings={settings}
+                        changeError={changeError}
                     />
                 </MovieDbContext.Provider>
             </GenresContext.Provider>

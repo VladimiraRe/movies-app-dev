@@ -10,6 +10,13 @@
 .moviesApp > input {
     margin-bottom: 36px;
 }
+.moviesApp__error-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 99;
+}
 @media (max-width: 576px) {
     .moviesApp {
         padding: 17px 16px;

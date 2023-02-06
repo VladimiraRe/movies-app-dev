@@ -1,4 +1,5 @@
 import { Component } from 'react';
+import PropTypes from 'prop-types';
 import { Typography, Tag, Card, Skeleton, Rate } from 'antd';
 import { v1 as uuidv1 } from 'uuid';
 import { intlFormat, parseISO } from 'date-fns';
@@ -7,6 +8,20 @@ import GenresContext from '../../contexts/GenresContext';
 import './CardMovie.css';
 
 export default class CardMovie extends Component {
+    static defaultProps = {
+        movie: { title: null, poster: null, date: null, description: null, voteAverage: null, genreIds: [] },
+        baseImgUrl: null,
+        onChangeRating: () => null,
+    };
+
+    static propTypes = {
+        movie: PropTypes.objectOf(
+            PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.arrayOf(PropTypes.number)])
+        ),
+        baseImgUrl: PropTypes.string,
+        onChangeRating: PropTypes.func,
+    };
+
     static contextType = GenresContext;
 
     state = {
@@ -67,15 +82,17 @@ export default class CardMovie extends Component {
 
         const { genres } = this.context;
         const tags = [];
-        genreIds.forEach((genreId) => {
-            const foundGenre = genres.find((genre) => genre.id === genreId);
-            if (!foundGenre) return;
-            tags.push(
-                <Tag style={{ textTransform: 'capitalize' }} key={uuidv1()}>
-                    {foundGenre.name}
-                </Tag>
-            );
-        });
+        if (genres) {
+            genreIds.forEach((genreId) => {
+                const foundGenre = genres.find((genre) => genre.id === genreId);
+                if (!foundGenre) return;
+                tags.push(
+                    <Tag style={{ textTransform: 'capitalize' }} key={uuidv1()}>
+                        {foundGenre.name}
+                    </Tag>
+                );
+            });
+        }
 
         let cover;
         if (!baseImgUrl || !poster) {
@@ -108,9 +125,11 @@ export default class CardMovie extends Component {
                     <Title ellipsis={ellipsis.title} level={5}>
                         {title}
                     </Title>
-                    <span className='cardMovie__vote' style={voteScale}>
-                        {voteAverage}
-                    </span>
+                    {voteAverage && (
+                        <span className='cardMovie__vote' style={voteScale}>
+                            {voteAverage}
+                        </span>
+                    )}
                 </div>
                 {date && <Text type='secondary'>{formatDate}</Text>}
                 {tags && (
