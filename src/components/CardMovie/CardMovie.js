@@ -9,7 +9,15 @@ import './CardMovie.css';
 
 export default class CardMovie extends Component {
     static defaultProps = {
-        movie: { title: null, poster: null, date: null, description: null, voteAverage: null, genreIds: [] },
+        movie: {
+            title: null,
+            poster: null,
+            date: null,
+            description: null,
+            voteAverage: null,
+            genreIds: [],
+            rating: null,
+        },
         baseImgUrl: null,
         onChangeRating: () => null,
     };
@@ -32,27 +40,26 @@ export default class CardMovie extends Component {
         const {
             movie: { rating },
         } = this.props;
-
-        this.setState({ rating: +rating });
+        this.setState({ rating });
     }
 
     componentDidUpdate(prevProps) {
         const {
-            movie: { rating: currentRating },
+            movie: { rating },
         } = this.props;
-        const { rating: prevRating } = prevProps.movie;
-        if (currentRating !== prevRating) {
-            this.setState({ rating: +currentRating });
+        if (rating !== prevProps.movie.rating) {
+            this.setState({ rating });
         }
     }
 
-    changeRating = async (rating) => {
-        const { rating: oldRating } = this.state;
-        if (rating === oldRating) return;
-        this.setState({ rating });
-        const isSuccess = await this.props.onChangeRating(rating, +rating === 0);
-        if (isSuccess) return;
-        this.setState({ rating: oldRating });
+    changeRating = async (newRating) => {
+        const {
+            movie: { rating },
+        } = this.props;
+        if (rating === newRating) return;
+        this.setState({ rating: newRating });
+        const isSuccess = await this.props.onChangeRating(newRating, +newRating === 0);
+        if (!isSuccess) this.setState({ rating });
     };
 
     render() {
@@ -60,10 +67,9 @@ export default class CardMovie extends Component {
             movie: { title, poster, date, description, voteAverage, genreIds },
             baseImgUrl,
         } = this.props;
+        const { rating } = this.state;
 
         if (!title) return null;
-
-        const { rating } = this.state;
 
         const { Text, Paragraph, Title } = Typography;
         const ellipsis = {

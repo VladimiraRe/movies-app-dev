@@ -221,12 +221,16 @@ export default class MoviesList extends Component {
 
     changeRating = async (data, rating, isNeedToDelete) => {
         const { changeRatedMovies } = this.props;
-        const id = isNeedToDelete ? data : data.id;
 
         try {
-            await this.theMovieDB.rateMovie(this.props.sessionId, id, rating, isNeedToDelete);
-            if (isNeedToDelete) changeRatedMovies(id, isNeedToDelete);
-            if (!isNeedToDelete) changeRatedMovies({ ...data, rating }, isNeedToDelete);
+            await this.theMovieDB.rateMovie(this.props.sessionId, data.id, rating, isNeedToDelete);
+            const { serverData, data: stateData } = this.state;
+            this.setState({
+                serverData: serverData.map((el) => (el.id === data.id ? { ...el, rating } : el)),
+                data: stateData.map((el) => (el.id === data.id ? { ...el, rating } : el)),
+            });
+            if (isNeedToDelete) changeRatedMovies(data.id, isNeedToDelete);
+            if (!isNeedToDelete) changeRatedMovies({ ...data, rating });
             return true;
         } catch {
             this.setState({ isRatingError: true }, () =>
@@ -288,9 +292,7 @@ function RenderContent({ data, baseImgUrl, changePage, changeRating, totalResult
                         <CardMovie
                             movie={item}
                             baseImgUrl={baseImgUrl}
-                            onChangeRating={(rating, isNeedToDelete) =>
-                                changeRating(!isNeedToDelete ? item : item.id, rating, isNeedToDelete)
-                            }
+                            onChangeRating={(rating, isNeedToDelete) => changeRating(item, rating, isNeedToDelete)}
                         />
                     </Item>
                 )}
