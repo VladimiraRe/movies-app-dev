@@ -85,9 +85,10 @@ export default class MoviesList extends Component {
             const {
                 settings: { appSize },
             } = this.props;
-            const { appPage } = this.state;
-            const newAppPage = Math.ceil(ratedMovies.length / appSize);
-            this.setMovies(newAppPage, false, newAppPage !== appPage);
+            const { appPage, totalResults } = this.state;
+            const newLastPage = Math.ceil(ratedMovies.length / appSize);
+            const newAppPage = appPage - 1 === newLastPage ? newLastPage : appPage;
+            this.setMovies(newAppPage, false, { totalResults: totalResults - 1 });
         }
     }
 
@@ -145,7 +146,7 @@ export default class MoviesList extends Component {
         return newState;
     };
 
-    setMovies = async (newPage, oldPage) => {
+    setMovies = async (newPage, oldPage, newTotalResults) => {
         const { method, serverData } = this.state;
         const {
             type,
@@ -183,8 +184,9 @@ export default class MoviesList extends Component {
                 this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
             }
             if (oldPage) {
-                const data = dataGeneration(dataStart, serverData);
-                this.setState(({ isLoaded }) => (!isLoaded ? { data, isLoaded: true } : { data }));
+                const newState = { data: dataGeneration(dataStart, serverData) };
+                if (newTotalResults) newState.totalResults = { ...newTotalResults };
+                this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
             }
             return;
         }
@@ -238,16 +240,19 @@ export default class MoviesList extends Component {
         const { data, isLoaded, totalResults, appPage, isRatingError } = this.state;
         const {
             baseImgUrl,
+            type,
             settings: { appSize },
         } = this.props;
         let res;
+        const alertMessage =
+            type === 'rated' ? 'Movies will appear here when you rate them' : 'Nothing found for your request';
 
         if (!isLoaded) {
             res = <Spin tip='Loading' />;
         } else if (!data && isLoaded) {
             res = <Alert message='Oops' description='Sorry, something is wrong. Please try again later' type='error' />;
         } else if (data.length === 0 && isLoaded) {
-            res = <Alert message='Nothing found for your request' type='warning' />;
+            res = <Alert message={alertMessage} type='warning' />;
         } else {
             res = (
                 <RenderContent

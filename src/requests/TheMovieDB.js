@@ -36,11 +36,11 @@ export default class TheMovieDB {
 
         if (page) {
             const ratedMovies = await getData(page, false, true);
-            return ratedMovies;
+            return ratedMovies.data;
         }
 
         const ratedMovies = await getData(1);
-        if (ratedMovies.totalPages === 1) return ratedMovies;
+        if (ratedMovies.totalPages === 1) return ratedMovies.data;
         const arr = [];
         for (let i = 2; i <= ratedMovies.totalPages; i++) {
             arr.push(
