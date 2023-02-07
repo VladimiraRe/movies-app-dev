@@ -79,7 +79,7 @@ export default class TheMovieDB {
     }
 
     async getConfiguration() {
-        const res = await this._get('/configuration');
+        const res = await this._get('/configuratio');
         return res;
     }
 

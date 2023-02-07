@@ -4,7 +4,7 @@
     max-width: 1010px;
     background-color: inherit;
 }
-.moviesApp > ul:first-child {
+.moviesApp > .moviesApp__menu {
     margin-bottom: 19px;
 }
 .moviesApp > input {

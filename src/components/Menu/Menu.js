@@ -27,13 +27,15 @@ export default class Menu extends Component {
     ];
 
     render() {
-        const { type, onClick } = this.props;
+        const { type, onClick, className } = this.props;
         const selected = type !== 'rated' ? 'popular' : type;
+        let menuClass = 'menu';
+        if (className) menuClass += ` ${className}`;
 
         return (
             <AntdMenu
                 onClick={({ key }) => onClick(key)}
-                className='menu'
+                className={menuClass}
                 mode='horizontal'
                 selectedKeys={[selected]}
                 items={this.items}

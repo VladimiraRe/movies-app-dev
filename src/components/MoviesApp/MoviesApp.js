@@ -50,6 +50,7 @@ export default class MoviesApp extends Component {
         let error = 0;
         newState.guestSessionId = await this.enterGuestSession().catch(() => {
             error += 1;
+            return null;
         });
         newState.genres = await this.theMovieDB.getGenres().catch(() => {
             error += 1;
@@ -57,7 +58,7 @@ export default class MoviesApp extends Component {
         });
         newState.baseImgUrl = await this.theMovieDB.getBaseImgUrl().catch(() => {
             error += 1;
-            return false;
+            return null;
         });
         newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId).catch(() => {
             error += 1;
@@ -232,7 +233,7 @@ function Content({
                     banner
                 />
             )}
-            <Menu onClick={changeType} type={type} />
+            <Menu className='moviesApp__menu' onClick={changeType} type={type} />
             {type !== 'rated' && (
                 <Input onChange={(e) => changeInput(e.target.value)} value={input} placeholder='Type to search...' />
             )}
