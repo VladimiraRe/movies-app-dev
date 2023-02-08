@@ -13,10 +13,11 @@ export default class MoviesList extends Component {
         type: 'popular',
         ratedMovies: [],
         settings: { appSize: 0, numberOfRequests: 0, numberOfMoviesInRequest: 0, serverLimit: 0, serverSize: 0 },
-        changeError: () => null,
+        changeErrors: () => null,
         changeRatedMovies: () => null,
         sessionId: '',
         baseImgUrl: null,
+        errors: {},
     };
 
     static propTypes = {
@@ -29,10 +30,11 @@ export default class MoviesList extends Component {
             )
         ),
         settings: PropTypes.objectOf(PropTypes.number),
-        changeError: PropTypes.func,
+        changeErrors: PropTypes.func,
         changeRatedMovies: PropTypes.func,
         sessionId: PropTypes.string,
         baseImgUrl: PropTypes.string,
+        errors: PropTypes.objectOf(PropTypes.oneOfType([PropTypes.arrayOf(PropTypes.string), PropTypes.number])),
     };
 
     static contextType = MovieDbContext;
@@ -92,7 +94,7 @@ export default class MoviesList extends Component {
         }
     }
 
-    getMovies = async (method, page) => {
+    getMovies = async (method, page, errorHandle) => {
         const {
             settings: { numberOfRequests, serverLimit, serverSize },
             ratedMovies,
@@ -102,24 +104,20 @@ export default class MoviesList extends Component {
         let start = 0;
 
         const fetch = async (i, fn) => {
-            await method(page + i, ratedMovies)
-                .then((r) => {
-                    if (page + i === 1) {
-                        if (r.totalPages <= serverLimit) {
-                            newState.totalPages = r.totalPages;
-                            newState.totalResults = r.totalResults;
-                        }
-                        if (r.totalPages > serverLimit) {
-                            newState.totalPages = serverLimit;
-                            newState.totalResults = serverLimit * serverSize;
-                        }
+            await method(page + i, ratedMovies).then((r) => {
+                if (page + i === 1) {
+                    if (r.totalPages <= serverLimit) {
+                        newState.totalPages = r.totalPages;
+                        newState.totalResults = r.totalResults;
                     }
-                    newState.serverData = [...newState.serverData, ...r.data];
-                    return fn ? fn(newState.totalPages) : null;
-                })
-                .catch((err) => {
-                    throw err;
-                });
+                    if (r.totalPages > serverLimit) {
+                        newState.totalPages = serverLimit;
+                        newState.totalResults = serverLimit * serverSize;
+                    }
+                }
+                newState.serverData = [...newState.serverData, ...r.data];
+                return fn ? fn(newState.totalPages) : null;
+            });
         };
 
         if (page === 1 && start === 0) {
@@ -134,15 +132,14 @@ export default class MoviesList extends Component {
             if (page + i <= totalPages) {
                 promises.push(
                     new Promise((resolve) => {
-                        fetch(i, resolve);
+                        fetch(i, resolve).catch(errorHandle);
                     })
                 );
             }
         }
 
-        await Promise.all(promises).catch((err) => {
-            throw err;
-        });
+        await Promise.all(promises);
+
         return newState;
     };
 
@@ -151,37 +148,56 @@ export default class MoviesList extends Component {
         const {
             type,
             settings: { appSize, numberOfMoviesInRequest, numberOfRequests },
-            changeError,
+            changeErrors,
         } = this.props;
 
         const dataGeneration = (start, data) => {
             return data.slice(start, start + appSize);
         };
 
-        const errState = {
-            serverData: null,
-            totalResults: null,
-            data: null,
-            appPage: null,
+        const errorHandle = () => {
+            const errState = {
+                serverData: null,
+                totalResults: null,
+                data: null,
+                appPage: null,
+            };
+
+            const { type: errorsType, moviesList } = this.props.errors;
+            if (!errorsType.find((el) => el === type) && moviesList < 3) {
+                changeErrors(3, 'moviesList', type);
+            }
+            this.setState(({ isLoaded }) => (!isLoaded ? { ...errState, isLoaded: true } : errState));
+            return false;
+        };
+
+        const noError = () => {
+            const { type: errorsType, moviesList } = this.props.errors;
+            if (moviesList >= 3 && errorsType.find((el) => el === type)) changeErrors(-3, 'moviesList', type);
         };
 
         if (type === 'rated' && newPage) {
             const dataStart = (newPage - 1) * appSize;
             if (!oldPage) {
                 let newState;
-                try {
-                    const ratedMovies = await method();
-                    newState = {
-                        serverData: ratedMovies,
-                        totalResults: ratedMovies.length,
-                        appPage: newPage,
-                    };
-                    newState.data = dataGeneration(dataStart, newState.serverData);
-                } catch {
-                    newState = { ...errState };
-                    changeError(3, 'moviesList');
-                }
-                this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
+                await method()
+                    .then((ratedMovies) => {
+                        if (!ratedMovies) {
+                            errorHandle();
+                            return;
+                        }
+                        newState = {
+                            serverData: ratedMovies,
+                            totalResults: ratedMovies.length,
+                            appPage: newPage,
+                        };
+                        newState.data = dataGeneration(dataStart, newState.serverData);
+                        noError();
+                        this.setState(({ isLoaded }) => (!isLoaded ? { ...newState, isLoaded: true } : newState));
+                    })
+                    .catch(() => {
+                        errorHandle();
+                    });
             }
             if (oldPage) {
                 const newState = { data: dataGeneration(dataStart, serverData) };
@@ -201,16 +217,20 @@ export default class MoviesList extends Component {
             return;
         }
 
-        const needNewServerData = async (start, page) => {
-            this.setState({ isLoaded: false }, async () => {
-                await this.getMovies(method, page)
-                    .then((r) => this.setState({ ...r, data: dataGeneration(start, r.serverData), isLoaded: true }))
-                    .catch(() => this.setState({ isLoaded: true, ...errState }, () => changeError(3, 'moviesList')));
-            });
-        };
-
         if (oldRequest !== newRequest || (!oldPage && newRequest)) {
-            await needNewServerData(dataStart, numberOfRequests * (newRequest - 1) + 1);
+            const page = numberOfRequests * (newRequest - 1) + 1;
+            this.setState({ isLoaded: false }, async () => {
+                await this.getMovies(method, page, () => errorHandle())
+                    .then((res) => {
+                        if (!res) {
+                            errorHandle();
+                            return;
+                        }
+                        noError();
+                        this.setState({ ...res, data: dataGeneration(dataStart, res.serverData), isLoaded: true });
+                    })
+                    .catch(() => errorHandle());
+            });
         }
     };
 
@@ -253,7 +273,7 @@ export default class MoviesList extends Component {
 
         if (!isLoaded) {
             res = <Spin tip='Loading' />;
-        } else if (!data && isLoaded) {
+        } else if (isLoaded && !data) {
             res = <Alert message='Oops' description='Sorry, something is wrong. Please try again later' type='error' />;
         } else if (data.length === 0 && isLoaded) {
             res = <Alert message={alertMessage} type='warning' />;

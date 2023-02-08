@@ -10,22 +10,24 @@ export default class TheMovieDB {
     async searchMovies(request, page, ratedMovies) {
         const method = '/search/movie';
         const res = await this._get(method, page, request);
-        const transformRes = await TheMovieDB._transformData(res.results, ratedMovies);
+        const transformRes = TheMovieDB._transformData(res.results, ratedMovies);
         return { data: transformRes, totalPages: res.total_pages, totalResults: res.total_results };
     }
 
     async getPopularMovies(page, ratedMovies) {
         const method = '/movie/popular';
         const res = await this._get(method, page);
-        const transformRes = await TheMovieDB._transformData(res.results, ratedMovies);
+        const transformRes = TheMovieDB._transformData(res.results, ratedMovies);
         return { data: transformRes, totalPages: res.total_pages, totalResults: res.total_results };
     }
 
-    async getRatedMovies(sessionId, page) {
+    async getRatedMovies(sessionId, errorHandle, page) {
         const method = `/guest_session/${sessionId}/rated/movies`;
         const getData = async (pageNumber, fn, definite) => {
-            const res = await this._get(method, pageNumber);
-            const transformRes = await TheMovieDB._transformData(res.results);
+            const res = await this._get(method, pageNumber).catch((err) => {
+                throw err;
+            });
+            const transformRes = TheMovieDB._transformData(res.results);
             let data = transformRes;
             if (pageNumber === 1 || definite) {
                 data = { data };
@@ -39,16 +41,22 @@ export default class TheMovieDB {
             return ratedMovies.data;
         }
 
-        const ratedMovies = await getData(1);
+        const ratedMovies = await getData(1).catch(() => {
+            errorHandle();
+            return false;
+        });
+        if (!ratedMovies) return [];
         if (ratedMovies.totalPages === 1) return ratedMovies.data;
         const arr = [];
         for (let i = 2; i <= ratedMovies.totalPages; i++) {
             arr.push(
                 new Promise((resolve) => {
                     getData(i, resolve);
-                }).then((r) => {
-                    ratedMovies.data = [...ratedMovies.data, ...r];
                 })
+                    .then((r) => {
+                        ratedMovies.data = [...ratedMovies.data, ...r];
+                    })
+                    .catch(() => errorHandle())
             );
         }
 
@@ -98,9 +106,7 @@ export default class TheMovieDB {
         if (request) url += `&query=${request}`;
         if (page) url += `&page=${page}`;
 
-        let res = await fetch(url).catch((err) => {
-            throw err;
-        });
+        let res = await fetch(url);
         if (!res.ok) throw new Error(`Couldn't fetch ${url}, response status: ${res.status}`);
         res = await res.json();
 
@@ -149,11 +155,5 @@ export default class TheMovieDB {
             return newMovieData;
         });
         return movies;
-    }
-
-    async _getRatedMoviesAllFields(sessionId, page) {
-        const method = `/guest_session/${sessionId}/rated/movies`;
-        const res = await this._get(method, page).catch(() => false);
-        return res;
     }
 }

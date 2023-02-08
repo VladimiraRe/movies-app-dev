@@ -8,6 +8,7 @@ import GenresContext from '../../contexts/GenresContext';
 import MovieDbContext from '../../contexts/MovieDbContext';
 import MoviesList from '../MoviesList';
 import Menu from '../Menu';
+import ErrorBoundary from '../ErrorBoundary';
 import './MoviesApp.css';
 
 export default class MoviesApp extends Component {
@@ -35,7 +36,7 @@ export default class MoviesApp extends Component {
         baseImgUrl: null,
         genres: [],
         ratedMovies: [],
-        error: { app: 0, moviesList: 0 },
+        errors: { app: 0, moviesList: 0, message: null, type: [], disable: null },
     };
 
     async componentDidMount() {
@@ -47,26 +48,36 @@ export default class MoviesApp extends Component {
         this.debounceSearch = debounce((input) => this.startSearch(input), 2000);
 
         const newState = { type: 'popular' };
-        let error = 0;
+        const errorsState = { errors: 0 };
         newState.guestSessionId = await this.enterGuestSession().catch(() => {
-            error += 1;
+            errorsState.errors += 1;
+            errorsState.message = 'Unable to create a guest session, film rating is not available';
+            errorsState.disable = ['rating'];
+            newState.ratedMovies = [];
             return null;
         });
+        if (newState.guestSessionId)
+            newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId, () => {
+                errorsState.errors += 1;
+                errorsState.message = 'The list of rated films is not available';
+                errorsState.disable = ['rating'];
+                return [];
+            });
         newState.genres = await this.theMovieDB.getGenres().catch(() => {
-            error += 1;
+            errorsState.errors += 1;
             return [];
         });
         newState.baseImgUrl = await this.theMovieDB.getBaseImgUrl().catch(() => {
-            error += 1;
+            errorsState.errors += 1;
             return null;
         });
-        newState.ratedMovies = await this.theMovieDB.getRatedMovies(newState.guestSessionId).catch(() => {
-            error += 1;
-            return [];
-        });
-        if (error > 0) {
-            const { error: stateError } = this.state;
-            newState.error = { ...stateError, app: error };
+        if (errorsState.errors > 0) {
+            const { errors: prevErrorsState } = this.state;
+            if (errorsState.errors === 1 && errorsState.message) {
+                newState.errors = { ...prevErrorsState, ...errorsState };
+            } else {
+                newState.errors = { ...prevErrorsState, app: errorsState.errors };
+            }
         }
         this.setState(newState);
     }
@@ -78,9 +89,14 @@ export default class MoviesApp extends Component {
         }
     }
 
-    changeError = (value, name) => {
-        this.setState(({ error }) => {
-            return { error: { ...error, [name]: error[name] + value } };
+    changeErrors = (value, name, type) => {
+        this.setState(({ errors }) => {
+            const newState = { [name]: errors[name] + value };
+            if (type) {
+                if (value > 0) newState.type = [...errors.type, type];
+                else newState.type = errors.type.filter((el) => el !== type);
+            }
+            return { errors: { ...errors, ...newState } };
         });
     };
 
@@ -126,18 +142,21 @@ export default class MoviesApp extends Component {
 
     getRatedMovies = async () => {
         const { guestSessionId, type } = this.state;
-        try {
-            const res = await this.theMovieDB.getRatedMovies(guestSessionId);
-            this.setState({ ratedMovies: res });
-            return res;
-        } catch {
-            if (type === 'rated') {
-                this.setState({ ratedMovies: [] });
+        const res = await this.theMovieDB
+            .getRatedMovies(guestSessionId, () => {
+                if (type === 'rated') {
+                    this.setState({ ratedMovies: [] });
+                    return false;
+                }
+                this.setState(({ errors }) => ({ ratedMovies: [], errors: { ...errors, app: errors.app + 1 } }));
                 return false;
-            }
-            this.setState(({ error }) => ({ ratedMovies: [], error: { ...error, app: error.app + 1 } }));
-            return false;
-        }
+            })
+            .then((ratedMovies) => {
+                this.setState({ ratedMovies });
+                return ratedMovies;
+            });
+
+        return res;
     };
 
     enterGuestSession = async () => {
@@ -158,7 +177,7 @@ export default class MoviesApp extends Component {
     };
 
     render() {
-        const { search, isOnline, guestSessionId, type, genres, input, baseImgUrl, ratedMovies, error } = this.state;
+        const { search, isOnline, guestSessionId, type, genres, input, baseImgUrl, ratedMovies, errors } = this.state;
         const { localStorage, ...appSettings } = this.settings;
         const { serverSize, serverLimit } = this.theMovieDB;
         const settings = { ...appSettings, serverSize, serverLimit };
@@ -184,9 +203,9 @@ export default class MoviesApp extends Component {
                         type={type}
                         settings={settings}
                         changeInput={this.changeInput}
-                        changeError={this.changeError}
+                        changeErrors={this.changeErrors}
                         context={{ genres, theMovieDB: this.theMovieDB }}
-                        error={error}
+                        errors={errors}
                     />
                 ) : (
                     <Alert message='Oops' description='No internet connection' type='error' />
@@ -207,25 +226,25 @@ function Content({
     guestSessionId,
     settings,
     changeInput,
-    changeError,
+    changeErrors,
     context,
     changeType,
-    error,
+    errors,
 }) {
-    const allError = Object.values(error).reduce((acc, el) => {
+    const { message, type: errorsType, disable, ...allErrors } = errors;
+    const countedErrors = Object.values(allErrors).reduce((acc, el) => {
         return acc + el;
     }, 0);
+    const isNeedDisable = !!(disable && disable.find((el) => el === 'rating'));
+    const errorMessage =
+        countedErrors === 1 && message ? message : "The app doesn't work correctly, we recommend to restart it";
+
     return (
         <>
-            {allError > 0 && allError <= 2 && (
-                <Alert
-                    className='moviesApp__error-banner'
-                    message="The app doesn't work correctly, we recommend to restart it"
-                    banner
-                    closable
-                />
+            {countedErrors > 0 && countedErrors <= 2 && (
+                <Alert className='moviesApp__error-banner' message={errorMessage} banner closable />
             )}
-            {allError > 2 && (
+            {countedErrors > 2 && (
                 <Alert
                     className='moviesApp__error-banner'
                     type='error'
@@ -233,25 +252,36 @@ function Content({
                     banner
                 />
             )}
-            <Menu className='moviesApp__menu' onClick={changeType} type={type} />
-            {type !== 'rated' && (
-                <Input onChange={(e) => changeInput(e.target.value)} value={input} placeholder='Type to search...' />
-            )}
-            <GenresContext.Provider value={context.genres}>
-                <MovieDbContext.Provider value={context.theMovieDB}>
-                    <MoviesList
-                        baseImgUrl={baseImgUrl}
-                        ratedMovies={ratedMovies}
-                        changeRatedMovies={changeRatedMovies}
-                        getRatedMovies={getRatedMovies}
-                        search={search}
-                        type={type}
-                        sessionId={guestSessionId}
-                        settings={settings}
-                        changeError={changeError}
+            <ErrorBoundary component='menu'>
+                <Menu className='moviesApp__menu' onClick={changeType} type={type} isNeedDisable={isNeedDisable} />
+            </ErrorBoundary>
+            <ErrorBoundary component='search'>
+                {type !== 'rated' && (
+                    <Input
+                        onChange={(e) => changeInput(e.target.value)}
+                        value={input}
+                        placeholder='Type to search...'
                     />
-                </MovieDbContext.Provider>
-            </GenresContext.Provider>
+                )}
+            </ErrorBoundary>
+            <ErrorBoundary component='list'>
+                <GenresContext.Provider value={context.genres}>
+                    <MovieDbContext.Provider value={context.theMovieDB}>
+                        <MoviesList
+                            baseImgUrl={baseImgUrl}
+                            ratedMovies={ratedMovies}
+                            changeRatedMovies={changeRatedMovies}
+                            getRatedMovies={getRatedMovies}
+                            search={search}
+                            type={type}
+                            sessionId={guestSessionId}
+                            settings={settings}
+                            changeErrors={changeErrors}
+                            errors={{ type: errorsType, moviesList: allErrors.moviesList }}
+                        />
+                    </MovieDbContext.Provider>
+                </GenresContext.Provider>
+            </ErrorBoundary>
         </>
     );
 }
